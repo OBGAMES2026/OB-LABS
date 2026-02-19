@@ -1,0 +1,2231 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hexify — Hex Puzzle</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#060c14; --cyan:#00e5ff; --indigo:#7c6fff; --violet:#dd44ff; --text:#c8dff0; --dim:#1a3548;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+body{background:var(--bg);font-family:'Rajdhani',sans-serif;color:var(--text);min-height:100vh;
+  display:flex;flex-direction:column;align-items:center;justify-content:flex-start;overflow:hidden;position:relative;-webkit-tap-highlight-color:transparent;
+  transition:transform .3s ease;padding:0.5rem 0.3rem;isolation:isolate;}
+body.tutorial-open{transform:translateY(-20vh);}
+body::before{content:'';position:fixed;inset:0;
+  background:radial-gradient(ellipse 60% 35% at 20% 20%,rgba(0,229,255,.05) 0%,transparent 55%),
+             radial-gradient(ellipse 50% 40% at 80% 80%,rgba(221,68,255,.06) 0%,transparent 55%);
+  pointer-events:none;}
+body::after{content:'';position:fixed;inset:0;
+  pointer-events:none;z-index:999;}
+
+/* ── BACKGROUND CANVAS ── */
+#bg-canvas{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;}
+
+.title{font-family:'Orbitron',monospace;font-size:clamp(1.4rem,6vw,2rem);font-weight:900;letter-spacing:.25em;
+  background:linear-gradient(110deg,var(--cyan) 0%,var(--indigo) 50%,var(--violet) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  filter:drop-shadow(0 0 8px rgba(0,229,255,.3));margin-bottom:.05rem;}
+.tagline{font-size:.45rem;letter-spacing:.15em;color:#1e3d55;text-transform:uppercase;margin-bottom:.4rem;font-weight:600;}
+
+.hud{display:flex;gap:.5rem;align-items:center;justify-content:center;margin-bottom:.5rem;flex-wrap:nowrap;font-size:0.9rem;}
+.hud-block{text-align:center;min-width:fit-content;display:flex;flex-direction:column;align-items:center;}
+.hud-lbl{font-size:.45rem;letter-spacing:.08em;color:#1e3d55;text-transform:uppercase;margin-bottom:.1rem;font-weight:600;white-space:nowrap;}
+.hud-val{font-family:'Orbitron',monospace;font-size:.95rem;font-weight:700;color:var(--cyan);
+  text-shadow:0 0 10px rgba(0,229,255,.45);line-height:1;transition:all .25s;}
+
+.level-dots{display:flex;gap:2px;justify-content:center;margin-bottom:.15rem;}
+.ld{width:4px;height:4px;border-radius:50%;background:#0a1e2e;border:1px solid #152535;transition:all .35s;}
+.ld.done{background:var(--cyan);border-color:var(--cyan);box-shadow:0 0 6px var(--cyan);}
+.ld.curr{background:var(--violet);border-color:var(--violet);box-shadow:0 0 6px var(--violet);}
+
+.target-chip{display:flex;align-items:center;gap:.2rem;padding:.2rem .4rem;border-radius:2px;border:1px solid transparent;transition:all .4s;}
+.chip-hex{width:11px;height:11px;clip-path:polygon(25% 0%,75% 0%,100% 50%,75% 100%,25% 100%,0% 50%);transition:background .4s,box-shadow .4s;}
+.chip-name{font-family:'Orbitron',monospace;font-size:.5rem;letter-spacing:.08em;transition:color .4s;}
+
+#board-wrap{position:relative;-webkit-tap-highlight-color:transparent;width:100%;margin:0 auto;display:flex;align-items:center;justify-content:center;}
+svg#board{display:block;overflow:hidden;cursor:pointer;-webkit-tap-highlight-color:transparent;max-width:95vw;max-height:var(--board-max-h,42vh);width:auto;height:auto;}
+
+/* hover preview */
+.hex-preview{filter:brightness(1.6) drop-shadow(0 0 12px rgba(255,255,255,.35)) !important;}
+/* hint pulse */
+.hex-pulse{animation:hpulse 1s ease-in-out infinite;}
+
+#game-message{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(0);z-index:1100;
+  background:rgba(6,12,20,.95);border:1px solid rgba(0,229,255,.4);border-radius:6px;
+  padding:1rem 2rem;font-family:'Orbitron',monospace;font-size:1rem;letter-spacing:.15em;
+  color:var(--cyan);text-shadow:0 0 12px rgba(0,229,255,.6);box-shadow:0 0 30px rgba(0,229,255,.15);
+  opacity:0;pointer-events:none;transition:all .3s cubic-bezier(.34,1.56,.64,1);}
+#game-message.show{transform:translate(-50%,-50%) scale(1);opacity:1;}
+@keyframes hpulse{0%,100%{filter:brightness(1.2) drop-shadow(0 0 8px var(--cyan));}50%{filter:brightness(2.4) drop-shadow(0 0 28px var(--cyan));}}
+
+/* ── TUTORIAL ── */
+#tutorial{position:fixed;bottom:0;left:0;right:0;z-index:800;
+  transform:translateY(100%);transition:transform .3s ease;pointer-events:all;}
+#tutorial.active{transform:translateY(0);}
+.tut-bubble{background:rgba(6,12,20,.97);
+  border:1px solid rgba(0,229,255,.22);border-radius:16px 16px 0 0;padding:1.2rem 1.5rem;
+  max-height:50vh;overflow-y:auto;box-shadow:0 -4px 40px rgba(0,229,255,.12),0 0 2px rgba(0,229,255,.18);
+  text-align:center;}
+@keyframes bblIn{to{transform:translateY(0);opacity:1;}}
+.tut-step{font-size:.6rem;letter-spacing:.25em;color:#1e3d55;text-transform:uppercase;margin-bottom:.45rem;}
+.tut-icon{font-size:1.5rem;margin-bottom:.35rem;}
+.tut-title{font-family:'Orbitron',monospace;font-size:.88rem;font-weight:700;letter-spacing:.15em;color:var(--cyan);margin-bottom:.45rem;}
+.tut-body{font-size:.84rem;line-height:1.65;color:#5a8aaa;letter-spacing:.02em;margin-bottom:.85rem;}
+.tut-body strong{color:var(--cyan);font-weight:700;}
+.tut-body .vi{color:var(--violet);}
+.tut-body .in{color:var(--indigo);}
+
+/* Progress bar in tutorial */
+.tut-progress{display:flex;gap:5px;justify-content:center;margin-bottom:.7rem;}
+.tp-dot{width:20px;height:3px;border-radius:2px;background:#0a1e2e;transition:all .3s;}
+.tp-dot.active{background:var(--cyan);box-shadow:0 0 6px var(--cyan);}
+
+.tut-btn{font-family:'Orbitron',monospace;font-size:.7rem;letter-spacing:.18em;padding:.5rem 1.4rem;
+  background:transparent;border:1px solid rgba(0,229,255,.35);color:var(--cyan);cursor:pointer;
+  border-radius:3px;transition:all .2s;text-transform:uppercase;}
+.tut-btn:hover:not(:disabled){background:rgba(0,229,255,.07);border-color:var(--cyan);box-shadow:0 0 12px rgba(0,229,255,.2);}
+.tut-btn:disabled{opacity:.35;cursor:not-allowed;}
+.tut-skip{margin-top:.5rem;display:block;font-size:.6rem;letter-spacing:.15em;color:#1e3d55;
+  cursor:pointer;text-transform:uppercase;border:none;background:none;transition:color .2s;}
+.tut-skip:hover{color:#3a6070;}
+
+/* Demo hex row inside tutorial */
+.demo-row{display:flex;gap:.35rem;align-items:center;justify-content:center;margin:.5rem 0 .7rem;}
+.demo-hex{width:22px;height:22px;clip-path:polygon(25% 0%,75% 0%,100% 50%,75% 100%,25% 100%,0% 50%);transition:all .4s;}
+.demo-arrow{color:#1e3d55;font-size:.75rem;}
+
+/* ── COLOR KEY ── */
+.color-key{display:flex;gap:.4rem;margin-top:.3rem;padding:.25rem .5rem;border:1px solid #0a1e2e;border-radius:2px;background:rgba(0,0,0,.2);flex-wrap:nowrap;justify-content:center;}
+.ck-item{display:flex;align-items:center;gap:.15rem;font-size:.5rem;letter-spacing:.03em;}
+.ck-dot{width:6px;height:6px;border-radius:50%;}
+.ck-arr{font-size:.5rem;color:#1e3d55;}
+
+/* ══════════════════════════════════════
+   MOBİL DOKUNMATIK İYİLEŞTİRMELER
+══════════════════════════════════════ */
+
+/* Buton barını yatay scroll yapılabilir ve sarmayan şekilde düzenle */
+.controls{display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:nowrap;
+  justify-content:center;overflow-x:auto;overflow-y:hidden;
+  width:100%;max-width:100vw;padding:.3rem .5rem;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none;scroll-snap-type:x mandatory;}
+.controls::-webkit-scrollbar{display:none;}
+.controls .btn{flex-shrink:0;scroll-snap-align:start;}
+
+/* Butonlara minimum dokunma alanı (Apple HIG: 44px) */
+.btn{min-height:36px;padding:.4rem .75rem;font-size:.52rem;}
+
+/* Mobilde hover efektlerini kapat (parmakla dokunmada yapışır) */
+@media (hover: none) and (pointer: coarse){
+  .btn:hover{border-color:#1e4a60;color:#4a8aaa;box-shadow:none;}
+  .tut-btn:hover:not(:disabled){background:transparent;border-color:rgba(0,229,255,.35);box-shadow:none;}
+  .daily-claim-btn:hover{background:linear-gradient(110deg,rgba(0,229,255,.15),rgba(221,68,255,.15));box-shadow:none;}
+}
+
+/* Aktif (basılı) state - parmak geri bildirimi */
+.btn:active{transform:scale(.94);opacity:.85;transition:transform .08s,opacity .08s;}
+.daily-claim-btn:active{transform:scale(.96);opacity:.85;}
+.tut-btn:active{transform:scale(.95);}
+
+/* Overlay'ler için swipe alanı göstergesi */
+.swipe-hint{width:40px;height:4px;background:rgba(255,255,255,.15);border-radius:2px;
+  margin:0 auto .8rem;display:none;}
+@media (hover: none) and (pointer: coarse){
+  .swipe-hint{display:block;}
+  /* Overlay panellerin alt kısmında kaydırma çubuğu göster */
+  .tut-bubble::before{content:'';display:block;width:40px;height:4px;
+    background:rgba(255,255,255,.12);border-radius:2px;margin:0 auto .8rem;}
+}
+
+/* Mobil için panel padding artır (parmak ulaşımı) */
+@media(max-width:480px){
+  .daily-panel{padding:1.5rem 1.2rem;}
+  .daily-days{gap:.3rem;}
+  .daily-day{width:38px;padding:.4rem .2rem;}
+  .stats-panel,.levelselect-panel{padding:1rem;}
+  body{padding:.3rem .2rem;}
+  /* Coin bar ortala */
+  .hud{flex-wrap:wrap;overflow-x:visible;width:100%;justify-content:center;
+    padding:.2rem .3rem;}
+  .hud-block{flex-shrink:0;}
+  /* Buton satırı mobilde ortala ve sar */
+  .controls{flex-wrap:wrap;justify-content:center;overflow-x:visible;}
+}
+
+/* Touch ripple efekti */
+.touch-ripple{position:fixed;border-radius:50%;pointer-events:none;z-index:9999;
+  background:rgba(0,229,255,.25);transform:scale(0);
+  animation:rippleOut .5s ease-out forwards;}
+@keyframes rippleOut{
+  0%{transform:scale(0);opacity:1;}
+  100%{transform:scale(4);opacity:0;}
+}
+
+/* iOS safe area (notch, home indicator) */
+body{
+  padding-bottom:max(0.3rem, env(safe-area-inset-bottom));
+  padding-left:max(0.2rem, env(safe-area-inset-left));
+  padding-right:max(0.2rem, env(safe-area-inset-right));
+}
+
+/* Mobil adres çubuğu kaymasını önle */
+html{height: -webkit-fill-available;}
+body{min-height:100vh;min-height:-webkit-fill-available;}
+.btn{font-family:'Orbitron',monospace;font-size:.48rem;letter-spacing:.12em;padding:.3rem .6rem;
+  background:transparent;border:1px solid #1e4a60;color:#4a8aaa;cursor:pointer;border-radius:2px;
+  text-transform:uppercase;transition:all .2s;display:inline-flex;align-items:center;gap:.2rem;font-weight:600;}
+.btn:hover{border-color:var(--cyan);color:var(--cyan);box-shadow:0 0 8px rgba(0,229,255,.12);}
+.btn:active{transform:scale(.97);}
+.btn svg{width:10px;height:10px;fill:currentColor;}
+
+#ad-overlay{display:none;position:fixed;inset:0;z-index:1000;background:rgba(6,12,20,.95);align-items:center;justify-content:center;backdrop-filter:blur(4px);}
+#ad-overlay.show{display:flex;}
+.ad-msg{font-family:'Orbitron',monospace;font-size:1.2rem;color:var(--cyan);letter-spacing:.15em;}
+
+#stats-overlay{display:none;position:fixed;inset:0;z-index:1000;background:rgba(6,12,20,.8);align-items:center;justify-content:center;backdrop-filter:blur(4px);}
+#stats-overlay.show{display:flex;}
+.stats-panel{background:rgba(6,12,20,.97);border:1px solid rgba(0,229,255,.22);border-radius:8px;padding:1.5rem;max-width:500px;width:90vw;max-height:80vh;box-shadow:0 0 40px rgba(0,229,255,.07);}
+.stats-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;}
+.stats-title{font-family:'Orbitron',monospace;font-size:1.2rem;font-weight:700;letter-spacing:.2em;color:var(--cyan);}
+.stats-close{font-family:'Orbitron',monospace;font-size:1.5rem;color:#4a8aaa;cursor:pointer;background:none;border:none;padding:.2rem .5rem;transition:all .2s;}
+.stats-close:hover{color:var(--cyan);}
+.stats-list{max-height:50vh;overflow-y:auto;padding-right:.5rem;}
+.stats-item{padding:.7rem 1rem;margin-bottom:.5rem;background:rgba(0,0,0,.3);border:1px solid #0a1e2e;border-radius:3px;font-size:.75rem;color:#5a8aaa;display:flex;justify-content:space-between;align-items:center;}
+.stats-level{color:var(--cyan);font-weight:600;}
+.stats-stars{color:#ffd700;margin:0 .5rem;}
+.stats-moves{color:#4a8aaa;}
+.stats-empty{text-align:center;padding:2rem;color:#1e3d55;font-size:.85rem;}
+
+#levelselect-overlay{display:none;position:fixed;inset:0;z-index:1000;background:rgba(6,12,20,.8);align-items:center;justify-content:center;backdrop-filter:blur(4px);}
+#levelselect-overlay.show{display:flex;}
+.levelselect-panel{background:rgba(6,12,20,.97);border:1px solid rgba(0,229,255,.22);border-radius:8px;padding:1.5rem;max-width:600px;width:90vw;max-height:80vh;box-shadow:0 0 40px rgba(0,229,255,.07);}
+.levelselect-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;}
+.levelselect-title{font-family:'Orbitron',monospace;font-size:1.2rem;font-weight:700;letter-spacing:.2em;color:var(--cyan);}
+.levelselect-close{font-family:'Orbitron',monospace;font-size:1.5rem;color:#4a8aaa;cursor:pointer;background:none;border:none;padding:.2rem .5rem;transition:all .2s;}
+.levelselect-close:hover{color:var(--cyan);}
+.levelselect-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:.8rem;max-height:50vh;overflow-y:auto;padding-right:.5rem;}
+.level-btn{font-family:'Orbitron',monospace;font-size:.75rem;padding:.8rem;background:rgba(0,229,255,.1);border:1px solid rgba(0,229,255,.3);color:var(--cyan);cursor:pointer;border-radius:4px;transition:all .2s;text-align:center;font-weight:600;}
+.level-btn:hover:not(:disabled){background:rgba(0,229,255,.2);border-color:var(--cyan);box-shadow:0 0 12px rgba(0,229,255,.3);}
+.level-btn:disabled{opacity:.25;cursor:not-allowed;background:rgba(0,0,0,.2);border-color:#0a1e2e;color:#1e3d55;}
+.level-btn.current{background:rgba(221,68,255,.15);border-color:var(--violet);color:var(--violet);}
+
+/* ── DAILY REWARD ── */
+#daily-overlay{display:none;position:fixed;inset:0;z-index:1200;background:rgba(6,12,20,.92);
+  align-items:center;justify-content:center;backdrop-filter:blur(8px);}
+#daily-overlay.show{display:flex;}
+.daily-panel{background:rgba(6,12,20,.98);border:1px solid rgba(0,229,255,.25);border-radius:12px;
+  padding:2rem 2.5rem;max-width:420px;width:90vw;text-align:center;
+  box-shadow:0 0 60px rgba(0,229,255,.1),0 0 120px rgba(221,68,255,.06);}
+.daily-title{font-family:'Orbitron',monospace;font-size:1rem;font-weight:900;letter-spacing:.2em;
+  background:linear-gradient(110deg,var(--cyan),var(--violet));-webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  margin-bottom:.3rem;}
+.daily-sub{font-size:.65rem;letter-spacing:.1em;color:#1e3d55;text-transform:uppercase;margin-bottom:1.5rem;}
+
+/* 7 günlük streak grid */
+.daily-days{display:flex;gap:.5rem;justify-content:center;margin-bottom:1.5rem;flex-wrap:wrap;}
+.daily-day{display:flex;flex-direction:column;align-items:center;gap:.3rem;
+  width:44px;padding:.5rem .3rem;border-radius:6px;border:1px solid #0a1e2e;
+  background:rgba(0,0,0,.3);transition:all .4s;position:relative;}
+.daily-day.done{border-color:rgba(0,229,255,.3);background:rgba(0,229,255,.07);}
+.daily-day.today{border-color:var(--violet);background:rgba(221,68,255,.12);
+  box-shadow:0 0 16px rgba(221,68,255,.25);}
+.daily-day.weekly{border-color:#ffd700;background:rgba(255,215,0,.08);
+  box-shadow:0 0 16px rgba(255,215,0,.2);}
+.daily-day-num{font-size:.4rem;letter-spacing:.1em;color:#1e3d55;text-transform:uppercase;}
+.daily-day-icon{font-size:1.1rem;line-height:1;}
+.daily-day-coin{font-family:'Orbitron',monospace;font-size:.45rem;color:#ffd700;font-weight:700;}
+.daily-day.done .daily-day-num{color:#00e5ff;}
+.daily-day.today .daily-day-num{color:var(--violet);}
+.daily-day.weekly .daily-day-num{color:#ffd700;}
+
+/* Ödül kutusu animasyonu */
+.reward-amount{font-family:'Orbitron',monospace;font-size:2rem;font-weight:900;
+  color:#ffd700;text-shadow:0 0 20px rgba(255,215,0,.6);margin:.5rem 0;
+  animation:rewardPop .6s cubic-bezier(.34,1.56,.64,1) forwards;}
+@keyframes rewardPop{from{transform:scale(0) rotate(-10deg);opacity:0;}to{transform:scale(1) rotate(0);opacity:1;}}
+
+.treasure-box{font-size:3.5rem;animation:treasureShake .5s .2s ease forwards;display:inline-block;}
+@keyframes treasureShake{0%{transform:rotate(-8deg) scale(.8);}25%{transform:rotate(8deg) scale(1.15);}
+  50%{transform:rotate(-4deg) scale(1.05);}75%{transform:rotate(4deg) scale(1.08);}100%{transform:rotate(0) scale(1);}}
+
+.daily-claim-btn{font-family:'Orbitron',monospace;font-size:.7rem;letter-spacing:.18em;padding:.6rem 2rem;
+  background:linear-gradient(110deg,rgba(0,229,255,.15),rgba(221,68,255,.15));
+  border:1px solid rgba(0,229,255,.4);color:var(--cyan);cursor:pointer;
+  border-radius:4px;transition:all .2s;text-transform:uppercase;margin-top:.5rem;}
+.daily-claim-btn:hover{background:linear-gradient(110deg,rgba(0,229,255,.25),rgba(221,68,255,.25));
+  box-shadow:0 0 20px rgba(0,229,255,.2);}
+.daily-streak{font-size:.6rem;letter-spacing:.08em;color:#3a6070;margin-top:.8rem;}
+.daily-streak span{color:var(--cyan);font-weight:700;}
+
+/* ── WIN ── */
+#win{display:none;position:fixed;inset:0;z-index:900;background:rgba(6,12,20,.93);
+  flex-direction:column;align-items:center;justify-content:center;gap:1rem;backdrop-filter:blur(6px);}
+#win.show{display:flex;animation:fadeIn .4s ease;}
+@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+.win-h{font-family:'Orbitron',monospace;font-size:clamp(2rem,6vw,3.2rem);font-weight:900;letter-spacing:.2em;
+  background:linear-gradient(110deg,var(--cyan),var(--violet));-webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  animation:winScale .6s cubic-bezier(.34,1.56,.64,1) forwards,wglow 2s ease-in-out infinite;opacity:0;}
+@keyframes winScale{0%{transform:scale(.6);opacity:0;}60%{transform:scale(1.1);opacity:1;}100%{transform:scale(1);opacity:1;}}
+@keyframes wglow{0%,100%{filter:drop-shadow(0 0 12px rgba(0,229,255,.5));}50%{filter:drop-shadow(0 0 28px rgba(221,68,255,.6));}}
+.win-sub{font-size:1rem;letter-spacing:.15em;color:#4a8aaa;opacity:0;animation:fadeInUp .4s .3s ease forwards;}
+.win-stars{font-size:1.6rem;letter-spacing:.1em;opacity:0;animation:fadeInUp .4s .4s ease forwards;}
+.win-par{font-family:'Orbitron',monospace;font-size:.75rem;color:var(--cyan);letter-spacing:.12em;opacity:0;animation:fadeInUp .4s .5s ease forwards;}
+.win-btns{display:flex;gap:.7rem;margin-top:.3rem;opacity:0;animation:fadeInUp .4s .6s ease forwards;}
+@keyframes fadeInUp{from{opacity:0;transform:translateY(15px);}to{opacity:1;transform:translateY(0);}}
+.win-coin-reward{font-family:'Orbitron',monospace;font-size:1.4rem;color:#ffd700;letter-spacing:.1em;font-weight:700;
+  text-shadow:0 0 15px rgba(255,215,0,.6);margin-bottom:.5rem;opacity:0;animation:coinPop .5s .4s cubic-bezier(.34,1.56,.64,1) forwards;}
+@keyframes coinPop{from{opacity:0;transform:scale(.5) translateY(20px);}to{opacity:1;transform:scale(1) translateY(0);}}
+#win-flash{position:fixed;inset:0;background:rgba(0,229,255,.4);pointer-events:none;z-index:950;opacity:0;}
+#win-canvas{position:fixed;inset:0;pointer-events:none;z-index:940;}
+.spark{position:fixed;border-radius:50%;pointer-events:none;z-index:950;animation:spark .85s ease-out forwards;}
+@keyframes spark{from{opacity:1;transform:translate(0,0) scale(1.2);}to{opacity:0;transform:translate(var(--tx),var(--ty)) scale(0);}}
+</style>
+</head>
+<body>
+
+<div id="daily-overlay">
+  <div class="daily-panel">
+    <div class="daily-title" id="daily-panel-title">GÜNLÜK ÖDÜL</div>
+    <div class="daily-sub" id="daily-panel-sub">Giriş Serisini Koru!</div>
+    <div id="daily-reward-icon" style="margin:.5rem 0;font-size:2.5rem;">🪙</div>
+    <div class="reward-amount" id="daily-reward-amount">+30</div>
+    <div class="daily-days" id="daily-days-grid"></div>
+    <div class="daily-streak" id="daily-streak-text">Seri: <span id="streak-num">1</span> gün</div>
+    <button class="daily-claim-btn" onclick="claimDailyReward()">ÖDÜLÜ AL</button>
+  </div>
+</div>
+
+<div id="tutorial"></div>
+<div id="game-message"></div>
+<div id="win-flash"></div>
+<canvas id="win-canvas"></canvas>
+<div id="win">
+  <div class="win-h" id="win-title">LEVEL COMPLETE</div>
+  <div class="win-stars" id="win-stars"></div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-coin-reward" id="win-coin-reward"></div>
+  <div class="win-par" id="win-par"></div>
+  <div class="win-btns">
+    <button class="btn" onclick="nextLevel()" onmouseenter="playSound('button')" style="color:var(--cyan);border-color:rgba(0,229,255,.4)">SONRAKİ LEVEL</button>
+    <button class="btn" onclick="resetLevel()" onmouseenter="playSound('button')">TEKRAR OYNA</button>
+  </div>
+  <div class="win-btns" id="win-ad-btn-container" style="margin-top:.5rem;display:none;">
+    <button class="btn" onclick="watchAdForStar()" onmouseenter="playSound('button')" style="color:#ffd700;border-color:rgba(255,215,0,.4);font-size:.65rem;">★ İZLE VE YILDIZ KAZAN ★</button>
+  </div>
+</div>
+
+<canvas id="bg-canvas"></canvas>
+<div class="title">Hexify</div>
+
+
+<div id="level-mechanic-info" style="text-align:center;margin-bottom:0.3rem;min-height:1.2rem;">
+  <span id="mechanic-text" style="font-size:0.55rem;color:#dd44ff;letter-spacing:0.08em;text-transform:uppercase;"></span>
+</div>
+
+<div class="hud">
+  <div class="hud-block">
+    <div class="hud-lbl">Level</div>
+    <div class="hud-val" id="hd-lv">1</div>
+  </div>
+  <div class="hud-block">
+    <div class="level-dots" id="lv-dots"></div>
+    <div class="hud-lbl">İlerleme</div>
+  </div>
+  <div class="hud-block">
+    <div class="hud-lbl">Hamle</div>
+    <div class="hud-val" id="hd-mv">0</div>
+  </div>
+  <div class="hud-block">
+    <div class="hud-lbl">Coins</div>
+    <div class="hud-val" id="hd-coins">0</div>
+  </div>
+  <div class="hud-block">
+    <div class="hud-lbl">Hedef renk</div>
+    <div class="target-chip" id="tgt-chip">
+      <div class="chip-hex" id="chip-hex"></div>
+      <span class="chip-name" id="chip-name"></span>
+    </div>
+  </div>
+</div>
+
+<div id="board-wrap">
+  <svg id="board"></svg>
+</div>
+
+<div class="color-key">
+  <div class="ck-item"><div class="ck-dot" style="background:var(--cyan);box-shadow:0 0 5px var(--cyan)"></div><span style="color:var(--cyan)">CYAN</span></div>
+  <div class="ck-arr">→</div>
+  <div class="ck-item"><div class="ck-dot" style="background:var(--indigo);box-shadow:0 0 5px var(--indigo)"></div><span style="color:var(--indigo)">INDIGO</span></div>
+  <div class="ck-arr">→</div>
+  <div class="ck-item"><div class="ck-dot" style="background:var(--violet);box-shadow:0 0 5px var(--violet)"></div><span style="color:var(--violet)">VIOLET</span></div>
+  <div class="ck-arr">→</div>
+  <div class="ck-item"><div class="ck-dot" style="background:var(--cyan);box-shadow:0 0 5px var(--cyan)"></div><span style="color:var(--cyan)">CYAN…</span></div>
+</div>
+
+<div class="controls">
+  <button class="btn" onclick="resetLevel()" onmouseenter="playSound('button')">↺ SIFIRLA</button>
+  <button class="btn" onclick="onUndoClick()" onmouseenter="playSound('button')">⟲ GERİ AL (5)</button>
+  <button class="btn" onclick="onHintButtonClick()" onmouseenter="playSound('button')">
+    <svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><path d="M346.4 346.5c5.3 8.4 10.1 17.2 14.3 26.3l24.8 53.6c3.9 8.4 2.7 18.3-3.2 25.6s-15.3 10-24.1 7.1l-55.6-18.5c-11.4-3.8-23.4-6-35.5-6.5V472c0 13.3-10.7 24-24 24h-32c-13.3 0-24-10.7-24-24v-37.9c-12.1.5-24.1 2.7-35.5 6.5l-55.6 18.5c-8.8 2.9-18.8.4-24.8-6.9s-7.1-17.2-3.2-25.6l24.8-53.6c4.2-9.1 9-17.9 14.3-26.3C63.2 305.6 32 258.9 32 205.3c0-77.2 54.6-141.9 127.3-157.3 8.6-34.1 39.2-59.7 75.7-59.7s67.1 25.6 75.7 59.7C383.4 63.4 438 128.1 438 205.3c0 53.6-31.2 100.3-76.6 122.2zM297.2 344.5c11.7-3.6 22.9-8.4 33.4-14.4 42.2-23.9 70.6-68.8 70.6-119.8 0-75.7-61.4-137.1-137.1-137.1s-137.1 61.4-137.1 137.1c0 51 28.4 95.9 70.6 119.8 10.5 6 21.7 10.8 33.4 14.4 11 3.4 21.4 8.3 30.9 14.5 9.5-6.2 19.9-11.1 30.9-14.5h4.4z"/></svg>
+    İPUCU (15)
+  </button>
+  <button class="btn" id="color-change-btn" onclick="onColorChangeClick()" onmouseenter="playSound('button')" style="color:#dd44ff;border-color:rgba(221,68,255,.4);">🎨 RENK DEĞİŞTİR (30)</button>
+  <button class="btn" onclick="launchTutorial()" onmouseenter="playSound('button')">? NASIL OYNANIR</button>
+  <button class="btn" onclick="openLevelSelect()" onmouseenter="playSound('button')">📋 LEVEL SEÇ</button>
+</div>
+
+<div style="margin-top:.5rem;text-align:center;">
+  <button class="btn" onclick="onEarnCoinClick()" onmouseenter="playSound('button')">💰 COİN KAZAN (30)</button>
+</div>
+
+<div style="margin-top:.4rem;text-align:center;">
+  <button class="btn" onclick="openStatsPanel()" onmouseenter="playSound('button')">İSTATİSTİK</button>
+</div>
+
+<div id="ad-overlay">
+  <div class="ad-msg">Reklam izleniyor...</div>
+</div>
+
+<div id="stats-overlay">
+  <div class="stats-panel">
+    <div class="stats-header">
+      <div class="stats-title">İSTATİSTİK</div>
+      <button class="stats-close" onclick="closeStatsPanel()">✕</button>
+    </div>
+    <div class="stats-list" id="stats-list"></div>
+  </div>
+</div>
+
+<div id="levelselect-overlay">
+  <div class="levelselect-panel">
+    <div class="levelselect-header">
+      <div class="levelselect-title">LEVEL SEÇ</div>
+      <button class="levelselect-close" onclick="closeLevelSelect()">✕</button>
+    </div>
+    <div class="levelselect-grid" id="levelselect-grid"></div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════
+const COLORS=[
+  {fill:'#00e5ff',glow:'rgba(0,229,255,.6)',   name:'CYAN'  },
+  {fill:'#7c6fff',glow:'rgba(124,111,255,.6)', name:'INDIGO'},
+  {fill:'#dd44ff',glow:'rgba(221,68,255,.6)',  name:'VIOLET'},
+];
+const N=COLORS.length;
+// ═══════════════════════════════════════
+// SEVIYE TABLOSU  (0-99 arası index)
+// hexCount : tahtadaki hex sayısı
+// scramble : başlangıç karıştırma hamlesi (zorluk ana faktörü)
+// par      : 3 yıldız için hedef hamle
+// mechanics: aktif özellik listesi
+//   'locked'     → kilitli hex(ler)
+//   'frozen'     → dondurulmuş hex(ler)
+//   'bomb'       → bomba hex
+//   'portal'     → portal çifti
+//   'multiplier' → ×2 çarpan hex
+// ═══════════════════════════════════════
+const LEVEL_TABLE = [
+  // ── BÖLÜM 1: Doğrusal Başlangıç — 7 hex, sade ──── Lv 1-8
+  { hexCount:7,  scramble:2,  par:5,  mechanics:[] },   // 1
+  { hexCount:7,  scramble:3,  par:6,  mechanics:[] },   // 2
+  { hexCount:7,  scramble:4,  par:8,  mechanics:[] },   // 3
+  { hexCount:7,  scramble:5,  par:10, mechanics:[] },   // 4
+  { hexCount:7,  scramble:6,  par:11, mechanics:[] },   // 5
+  { hexCount:7,  scramble:7,  par:13, mechanics:[] },   // 6
+  { hexCount:7,  scramble:8,  par:14, mechanics:[] },   // 7
+  { hexCount:7,  scramble:9,  par:16, mechanics:[] },   // 8
+
+  // ── BÖLÜM 2: İlk Büyüme — 9 hex, sade ──────────── Lv 9-14
+  { hexCount:9,  scramble:5,  par:10, mechanics:[] },   // 9
+  { hexCount:9,  scramble:6,  par:12, mechanics:[] },   // 10
+  { hexCount:9,  scramble:7,  par:13, mechanics:[] },   // 11
+  { hexCount:9,  scramble:8,  par:15, mechanics:[] },   // 12
+  { hexCount:9,  scramble:9,  par:17, mechanics:[] },   // 13
+  { hexCount:9,  scramble:10, par:18, mechanics:[] },   // 14
+
+  // ── BÖLÜM 3: KİLİT Tanıtımı — 7 hex (küçük tahta!) Lv 15-18
+  { hexCount:7,  scramble:5,  par:10, mechanics:['locked'] },  // 15 ← kilit ilk kez, küçük tahta
+  { hexCount:7,  scramble:6,  par:12, mechanics:['locked'] },  // 16
+  { hexCount:9,  scramble:6,  par:13, mechanics:['locked'] },  // 17
+  { hexCount:9,  scramble:7,  par:15, mechanics:['locked'] },  // 18
+
+  // ── BÖLÜM 4: 11 hex, sade — nefes al ───────────── Lv 19-23
+  { hexCount:11, scramble:7,  par:14, mechanics:[] },   // 19
+  { hexCount:11, scramble:8,  par:16, mechanics:[] },   // 20
+  { hexCount:11, scramble:9,  par:17, mechanics:[] },   // 21
+  { hexCount:11, scramble:10, par:19, mechanics:[] },   // 22
+  { hexCount:11, scramble:11, par:21, mechanics:[] },   // 23
+
+  // ── BÖLÜM 5: DONMUŞ Tanıtımı — 7 hex (küçük!) ─── Lv 24-27
+  { hexCount:7,  scramble:5,  par:10, mechanics:['frozen'] },  // 24 ← donmuş ilk kez
+  { hexCount:9,  scramble:6,  par:12, mechanics:['frozen'] },  // 25
+  { hexCount:11, scramble:7,  par:15, mechanics:['frozen'] },  // 26
+  { hexCount:11, scramble:9,  par:18, mechanics:['frozen'] },  // 27
+
+  // ── BÖLÜM 6: Kombine I — 11 hex, kilit+donmuş ─── Lv 28-31
+  { hexCount:11, scramble:8,  par:16, mechanics:['locked','frozen'] }, // 28
+  { hexCount:11, scramble:9,  par:18, mechanics:['locked','frozen'] }, // 29
+  { hexCount:11, scramble:10, par:20, mechanics:['locked','frozen'] }, // 30
+  { hexCount:11, scramble:11, par:22, mechanics:['locked','frozen'] }, // 31
+
+  // ── BÖLÜM 7: İlk 19 hex — sade ──────────────────── Lv 32-35
+  { hexCount:19, scramble:8,  par:18, mechanics:[] },   // 32
+  { hexCount:19, scramble:9,  par:20, mechanics:[] },   // 33
+  { hexCount:19, scramble:10, par:22, mechanics:[] },   // 34
+  { hexCount:19, scramble:11, par:24, mechanics:[] },   // 35
+
+  // ── BÖLÜM 8: BOMBA Tanıtımı — 9 hex (küçük!) ───── Lv 36-39
+  { hexCount:9,  scramble:5,  par:10, mechanics:['bomb'] },   // 36 ← bomba ilk kez
+  { hexCount:11, scramble:7,  par:14, mechanics:['bomb'] },   // 37
+  { hexCount:19, scramble:9,  par:20, mechanics:['bomb'] },   // 38
+  { hexCount:19, scramble:10, par:22, mechanics:['bomb','frozen'] }, // 39
+
+  // ── BÖLÜM 9: 19 hex, kilit+donmuş kombine ───────── Lv 40-43
+  { hexCount:19, scramble:10, par:22, mechanics:['locked','frozen'] }, // 40
+  { hexCount:19, scramble:11, par:24, mechanics:['locked','frozen'] }, // 41
+  { hexCount:19, scramble:12, par:26, mechanics:['locked','bomb']   }, // 42
+  { hexCount:19, scramble:13, par:28, mechanics:['frozen','bomb']   }, // 43
+
+  // ── BÖLÜM 10: İlk 37 hex — sade ─────────────────── Lv 44-47
+  { hexCount:37, scramble:12, par:26, mechanics:[] },   // 44
+  { hexCount:37, scramble:13, par:28, mechanics:[] },   // 45
+  { hexCount:37, scramble:14, par:30, mechanics:[] },   // 46
+  { hexCount:37, scramble:15, par:32, mechanics:[] },   // 47
+
+  // ── BÖLÜM 11: PORTAL Tanıtımı — 9 hex (küçük!) ── Lv 48-51
+  { hexCount:9,  scramble:5,  par:12, mechanics:['portal'] },  // 48 ← portal ilk kez
+  { hexCount:11, scramble:7,  par:15, mechanics:['portal'] },  // 49
+  { hexCount:19, scramble:9,  par:20, mechanics:['portal'] },  // 50
+  { hexCount:19, scramble:10, par:22, mechanics:['portal','frozen'] }, // 51
+
+  // ── BÖLÜM 12: ÇARPAN Tanıtımı — 9 hex (küçük!) ── Lv 52-55
+  { hexCount:9,  scramble:5,  par:10, mechanics:['multiplier'] },  // 52 ← ×2 ilk kez
+  { hexCount:11, scramble:7,  par:14, mechanics:['multiplier'] },  // 53
+  { hexCount:19, scramble:9,  par:20, mechanics:['multiplier','locked'] }, // 54
+  { hexCount:19, scramble:10, par:22, mechanics:['multiplier','frozen'] }, // 55
+
+  // ── BÖLÜM 13: 37 hex, mekanik mix ───────────────── Lv 56-61
+  { hexCount:37, scramble:13, par:28, mechanics:['locked'] },            // 56
+  { hexCount:37, scramble:14, par:30, mechanics:['frozen'] },            // 57
+  { hexCount:37, scramble:15, par:32, mechanics:['locked','frozen'] },   // 58
+  { hexCount:37, scramble:15, par:32, mechanics:['bomb'] },              // 59
+  { hexCount:37, scramble:16, par:34, mechanics:['portal'] },            // 60
+  { hexCount:37, scramble:16, par:34, mechanics:['multiplier'] },        // 61
+
+  // ── BÖLÜM 14: 37 hex, kombine ────────────────────── Lv 62-66
+  { hexCount:37, scramble:15, par:32, mechanics:['locked','bomb'] },           // 62
+  { hexCount:37, scramble:16, par:34, mechanics:['frozen','portal'] },         // 63
+  { hexCount:37, scramble:17, par:36, mechanics:['multiplier','locked'] },     // 64
+  { hexCount:37, scramble:18, par:38, mechanics:['bomb','portal'] },           // 65
+  { hexCount:37, scramble:19, par:40, mechanics:['locked','frozen','bomb'] },  // 66
+
+  // ── BÖLÜM 15: İlk 61 hex — sade ─────────────────── Lv 67-70
+  { hexCount:61, scramble:18, par:38, mechanics:[] },   // 67
+  { hexCount:61, scramble:19, par:40, mechanics:[] },   // 68
+  { hexCount:61, scramble:20, par:42, mechanics:[] },   // 69
+  { hexCount:61, scramble:21, par:44, mechanics:[] },   // 70
+
+  // ── BÖLÜM 16: 61 hex, mekanik mix ───────────────── Lv 71-76
+  { hexCount:61, scramble:20, par:42, mechanics:['locked'] },           // 71
+  { hexCount:61, scramble:21, par:44, mechanics:['frozen'] },           // 72
+  { hexCount:61, scramble:22, par:46, mechanics:['locked','frozen'] },  // 73
+  { hexCount:61, scramble:23, par:48, mechanics:['bomb'] },             // 74
+  { hexCount:61, scramble:24, par:50, mechanics:['portal','frozen'] },  // 75
+  { hexCount:61, scramble:25, par:52, mechanics:['multiplier','locked'] }, // 76
+
+  // ── BÖLÜM 17: 61 hex, tam kombine ────────────────── Lv 77-81
+  { hexCount:61, scramble:24, par:50, mechanics:['locked','frozen','bomb'] },          // 77
+  { hexCount:61, scramble:25, par:52, mechanics:['portal','multiplier'] },             // 78
+  { hexCount:61, scramble:26, par:54, mechanics:['bomb','portal','frozen'] },          // 79
+  { hexCount:61, scramble:27, par:56, mechanics:['locked','multiplier','bomb'] },      // 80
+  { hexCount:61, scramble:28, par:58, mechanics:['locked','frozen','portal','bomb'] }, // 81
+
+  // ── BÖLÜM 18: İlk 91 hex — sade ─────────────────── Lv 82-85
+  { hexCount:91, scramble:26, par:54, mechanics:[] },   // 82
+  { hexCount:91, scramble:27, par:56, mechanics:[] },   // 83
+  { hexCount:91, scramble:28, par:58, mechanics:[] },   // 84
+  { hexCount:91, scramble:29, par:60, mechanics:[] },   // 85
+
+  // ── BÖLÜM 19: 91 hex, kombine ────────────────────── Lv 86-90
+  { hexCount:91, scramble:28, par:58, mechanics:['locked','frozen'] },           // 86
+  { hexCount:91, scramble:30, par:62, mechanics:['bomb','portal'] },             // 87
+  { hexCount:91, scramble:32, par:66, mechanics:['multiplier','locked'] },       // 88
+  { hexCount:91, scramble:34, par:70, mechanics:['locked','frozen','bomb'] },    // 89
+  { hexCount:91, scramble:36, par:74, mechanics:['portal','multiplier','frozen'] }, // 90
+
+  // ── BÖLÜM 20: GRAND FINALE — 91 hex, tam kaos ──── Lv 91-100
+  { hexCount:91, scramble:36, par:74,  mechanics:['locked','frozen','bomb','portal'] },            // 91
+  { hexCount:91, scramble:38, par:78,  mechanics:['locked','multiplier','portal','frozen'] },      // 92
+  { hexCount:91, scramble:40, par:82,  mechanics:['frozen','portal','bomb','multiplier'] },        // 93
+  { hexCount:91, scramble:42, par:86,  mechanics:['locked','frozen','bomb','multiplier'] },        // 94
+  { hexCount:91, scramble:44, par:90,  mechanics:['portal','bomb','multiplier','frozen','locked'] }, // 95
+  { hexCount:91, scramble:46, par:94,  mechanics:['locked','frozen','bomb','portal','multiplier'] }, // 96
+  { hexCount:91, scramble:48, par:98,  mechanics:['locked','frozen','bomb','portal','multiplier'] }, // 97
+  { hexCount:91, scramble:50, par:102, mechanics:['locked','frozen','bomb','portal','multiplier'] }, // 98
+  { hexCount:91, scramble:52, par:106, mechanics:['locked','frozen','bomb','portal','multiplier'] }, // 99
+  { hexCount:91, scramble:55, par:112, mechanics:['locked','frozen','bomb','portal','multiplier'] }, // 100
+];
+
+function getLevelConfig(level){
+  const idx = Math.min(level, LEVEL_TABLE.length - 1);
+  const cfg = LEVEL_TABLE[idx];
+  return { hexCount: cfg.hexCount, scramble: cfg.scramble, par: cfg.par };
+}
+const DIRS=[[1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]];
+const HS=38;
+
+// ═══════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════
+let lv=0,moves=0,board=[],target=[],locked=false,rng=1;
+let coins=0;
+let highestUnlockedLevel=0;
+let levelStats={};
+let tutState=null;
+let moveHistory=[];
+let currentWinStars=0;
+let currentWinPar=0;
+
+function seedRng(s){rng=s>>>0||1;}
+function rand(){rng^=rng<<13;rng^=rng>>17;rng^=rng<<5;return(rng>>>0)/0x100000000;}
+
+// ═══════════════════════════════════════
+// SOUND
+// ═══════════════════════════════════════
+const audioContext=new (window.AudioContext||window.webkitAudioContext)();
+
+function playTone(freq, vol, duration, freqEnd){
+  const t = audioContext.currentTime;
+  const osc = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(freq, t);
+  if(freqEnd) osc.frequency.exponentialRampToValueAtTime(freqEnd, t + duration);
+  gain.gain.setValueAtTime(0, t);
+  gain.gain.linearRampToValueAtTime(vol, t + 0.018);   // uzun, nefes gibi açılış
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+  osc.connect(gain); gain.connect(audioContext.destination);
+  osc.start(t); osc.stop(t + duration);
+}
+
+function playSound(type){
+  // Mobil cihazlarda 'button' hover sesini çalma
+  const isTouchDevice = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+  if(type === 'button' && isTouchDevice) return;
+  if(type==='click'){
+    // Nefes gibi, çok hafif kristal
+    playTone(528, 0.028, 0.28, 480);
+    playTone(1056, 0.008, 0.18);
+  }
+  else if(type==='cascade'){
+    // Click'ten de daha sessiz, hafif titreşim
+    playTone(594, 0.022, 0.22, 528);
+  }
+  else if(type==='solve'){
+    // Level tamamlama — sessiz, yükselen üç nota
+    playTone(523, 0.032, 0.30);
+    setTimeout(()=>playTone(659, 0.030, 0.30), 180);
+    setTimeout(()=>playTone(784, 0.034, 0.45), 360);
+  }
+  else if(type==='coin'){
+    // Çok hafif bir ding
+    playTone(740, 0.026, 0.20, 800);
+  }
+  else if(type==='hint'){
+    // Fısıltı gibi uyarı
+    playTone(432, 0.022, 0.32, 460);
+  }
+  else if(type==='button'){
+    // Neredeyse duyulmaz
+    playTone(380, 0.015, 0.10, 350);
+  }
+}
+
+// ═══════════════════════════════════════
+// HEX MATH
+// ═══════════════════════════════════════
+function axialToXY(q,r){return{x:HS*1.5*q,y:HS*(Math.sqrt(3)/2*q+Math.sqrt(3)*r)};}
+function hexCorners(cx,cy,size){
+  return Array.from({length:6},(_,i)=>{
+    const a=Math.PI/3*i;
+    return`${(cx+size*Math.cos(a)).toFixed(2)},${(cy+size*Math.sin(a)).toFixed(2)}`;
+  }).join(' ');
+}
+function makeGrid(hexCount){
+  const c=[];
+  let coords=[];
+  
+  if(hexCount===7){
+    // 7 kutucuk: Merkez + 6 etraf (klasik)
+    coords=[
+      [0,0],   // merkez
+      [1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]  // 6 etraf
+    ];
+  }
+  else if(hexCount===9){
+    // 9 kutucuk: Merkez + 6 etraf + sağ üst + sol alt
+    coords=[
+      [0,0],   // merkez
+      [1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1],  // iç halka (6 komşu)
+      [2,-1],  // sağ üst ekstra (1 numaralı hex)
+      [-2,1]   // sol alt ekstra (2 numaralı hex)
+    ];
+  }
+  else if(hexCount===11){
+    // 11 kutucuk: Yatay dağılımlı desen (üstte taşma yok)
+    coords=[
+      [0,0],   // merkez
+      [1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1],  // iç halka (6 komşu)
+      [2,0],   // sağda
+      [-2,0],  // solda
+      [2,-1],  // sağ üst
+      [-2,1]   // sol alt
+    ];
+  }
+  else if(hexCount===19){
+    // 19 kutucuk: Tam radius 2
+    for(let q=-2;q<=2;q++)
+      for(let r=-2;r<=2;r++)
+        if(Math.abs(q+r)<=2) coords.push([q,r]);
+  }
+  else if(hexCount===37){
+    // 37 kutucuk: Tam radius 3
+    for(let q=-3;q<=3;q++)
+      for(let r=-3;r<=3;r++)
+        if(Math.abs(q+r)<=3) coords.push([q,r]);
+  }
+  else if(hexCount===61){
+    // 61 kutucuk: Tam radius 4
+    for(let q=-4;q<=4;q++)
+      for(let r=-4;r<=4;r++)
+        if(Math.abs(q+r)<=4) coords.push([q,r]);
+  }
+  else if(hexCount===91){
+    // 91 kutucuk: Tam radius 5
+    for(let q=-5;q<=5;q++)
+      for(let r=-5;r<=5;r++)
+        if(Math.abs(q+r)<=5) coords.push([q,r]);
+  }
+  else{
+    // 127 kutucuk: Tam radius 6
+    for(let q=-6;q<=6;q++)
+      for(let r=-6;r<=6;r++)
+        if(Math.abs(q+r)<=6) coords.push([q,r]);
+  }
+  
+  coords.forEach(([q,r])=>{
+    const{x,y}=axialToXY(q,r);
+    c.push({
+      q,r,x,y,
+      color:0,
+      id:`${q}_${r}`,
+      locked:false,      // Kilitli hex (tıklanamaz)
+      frozen:false,      // Dondurulmuş (renk değişmez)
+      portal:null,       // Portal (başka hex'e ışınlanır)
+      bomb:false,        // Bomba (tüm tahtayı etkiler)
+      multiplier:1       // Çarpan (kaç kez değişir)
+    });
+  });
+  
+  return c;
+}
+function getNeighbors(q,r){return DIRS.map(([dq,dr])=>board.find(h=>h.q===q+dq&&h.r===r+dr)).filter(Boolean);}
+
+// ═══════════════════════════════════════
+// CORE LOGIC
+// ═══════════════════════════════════════
+function applyMove(hex,count=false){
+  // Kilitli hex'e tıklanamaz
+  if(hex.locked) {
+    if(count) showGameMessage("🔒 Kilitli Hex!");
+    return [];
+  }
+  
+  let aff=[hex,...getNeighbors(hex.q,hex.r)];
+  
+  // Portal: Işınlanma efekti (hem gerçek hem simülasyon için)
+  if(hex.portal){
+    const portalHex = board.find(h=>h.id===hex.portal);
+    if(portalHex){
+      aff = [portalHex, ...getNeighbors(portalHex.q, portalHex.r)];
+      if(count) playSound('coin');
+    }
+  }
+  
+  // Bomba: Tüm tahtayı etkiler (hem gerçek hem simülasyon için)
+  if(hex.bomb){
+    aff = [...board];
+    if(count) playSound('solve');
+  }
+  
+  // Renk değişimi (dondurulmuş ve kilitli hexler değişmez)
+  const times = hex.multiplier || 1;
+  for(let t=0; t<times; t++){
+    aff.forEach(h=>{
+      if(!h.frozen && !h.locked){
+        h.color=(h.color+1)%N;
+      }
+    });
+  }
+  
+  if(count){moves++;animateMoves();}
+  return aff;
+}
+function isSolved(){
+  return board.every(h=>{
+    const t=target.find(tgt=>tgt.q===h.q&&tgt.r===h.r);
+    return t&&h.color===t.color;
+  });
+}
+
+// ═══════════════════════════════════════
+// LEVEL
+// ═══════════════════════════════════════
+function initLevel(lvIdx){
+  lv=lvIdx; moves=0; locked=false;
+  moveHistory=[];
+  colorChangeMode=false;
+  const btn=document.getElementById('color-change-btn');
+  if(btn){btn.style.boxShadow='';btn.textContent='🎨 RENK DEĞİŞTİR (30)';}
+  document.getElementById('win').classList.remove('show');
+  const cfg=getLevelConfig(lv);
+  seedRng(lv*131+97);
+  board=makeGrid(cfg.hexCount);
+  const tgtColor=Math.floor(rand()*N);
+  board.forEach(h=>h.color=tgtColor);
+  target=board.map(h=>({q:h.q,r:h.r,color:h.color}));
+  
+  // ═══ ÖZEL MEKANİKLER ═══
+  applyLevelMechanics(lv);
+  
+  for(let i=0;i<cfg.scramble;i++) applyMove(board[Math.floor(rand()*board.length)],false);
+  buildSVG(cfg.hexCount);
+  renderColors();
+  updateHUD();
+}
+
+// ═══════════════════════════════════════
+// KİLİTLİ HEX KONUMLARI — Sadece merkez veya köşeler
+// ═══════════════════════════════════════
+function getLockCandidates(){
+  const hexCount = board.length;
+  let candidates = [];
+
+  // Merkez her zaman aday
+  const center = board.find(h => h.q === 0 && h.r === 0);
+  if(center) candidates.push(center);
+
+  // Grid tipine göre köşe hexleri belirle
+  if(hexCount === 7){
+    // Tüm dış hexler köşe sayılır (6 adet)
+    [[1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]].forEach(([q,r])=>{
+      const h = board.find(x=>x.q===q&&x.r===r);
+      if(h) candidates.push(h);
+    });
+  } else if(hexCount === 9){
+    [[2,-1],[-2,1]].forEach(([q,r])=>{
+      const h = board.find(x=>x.q===q&&x.r===r);
+      if(h) candidates.push(h);
+    });
+  } else if(hexCount === 11){
+    [[2,0],[-2,0],[2,-1],[-2,1]].forEach(([q,r])=>{
+      const h = board.find(x=>x.q===q&&x.r===r);
+      if(h) candidates.push(h);
+    });
+  } else if(hexCount === 19){
+    // Radius 2 köşeleri
+    [[2,0],[2,-2],[0,-2],[-2,0],[-2,2],[0,2]].forEach(([q,r])=>{
+      const h = board.find(x=>x.q===q&&x.r===r);
+      if(h) candidates.push(h);
+    });
+  } else if(hexCount === 37){
+    // Radius 3 köşeleri
+    [[3,0],[3,-3],[0,-3],[-3,0],[-3,3],[0,3]].forEach(([q,r])=>{
+      const h = board.find(x=>x.q===q&&x.r===r);
+      if(h) candidates.push(h);
+    });
+  } else if(hexCount === 61){
+    // Radius 4 köşeleri
+    [[4,0],[4,-4],[0,-4],[-4,0],[-4,4],[0,4]].forEach(([q,r])=>{
+      const h = board.find(x=>x.q===q&&x.r===r);
+      if(h) candidates.push(h);
+    });
+  } else if(hexCount === 91){
+    // Radius 5 köşeleri
+    [[5,0],[5,-5],[0,-5],[-5,0],[-5,5],[0,5]].forEach(([q,r])=>{
+      const h = board.find(x=>x.q===q&&x.r===r);
+      if(h) candidates.push(h);
+    });
+  } else {
+    // Radius 6 köşeleri (127 hex)
+    [[6,0],[6,-6],[0,-6],[-6,0],[-6,6],[0,6]].forEach(([q,r])=>{
+      const h = board.find(x=>x.q===q&&x.r===r);
+      if(h) candidates.push(h);
+    });
+  }
+
+  return candidates;
+}
+
+function pickLockedHex(usedIds){
+  const candidates = getLockCandidates().filter(h => !h.locked && !usedIds.includes(h.id));
+  if(candidates.length === 0) return null;
+  return candidates[Math.floor(rand() * candidates.length)];
+}
+
+// ═══════════════════════════════════════
+// LEVEL MEKANİKLERİ
+// ═══════════════════════════════════════
+function applyLevelMechanics(level){
+  const idx = Math.min(level, LEVEL_TABLE.length - 1);
+  const mechanics = LEVEL_TABLE[idx].mechanics;
+  if(!mechanics || mechanics.length === 0) return;
+
+  // KİLİTLİ HEX
+  if(mechanics.includes('locked')){
+    const lockCount = Math.min(2, Math.floor(board.length / 5));
+    const usedIds = [];
+    for(let i = 0; i < lockCount; i++){
+      const hex = pickLockedHex(usedIds);
+      if(hex){ 
+        hex.locked = true; 
+        // Kilitli hexler cyan (0) olmasın, sadece indigo (1) veya violet (2) olsun
+        hex.color = Math.floor(rand() * 2) + 1; // 1 veya 2 (indigo veya violet)
+        usedIds.push(hex.id); 
+      }
+    }
+  }
+
+  // DONDURULMUŞ HEX
+  if(mechanics.includes('frozen')){
+    const freezeCount = Math.min(3, Math.floor(board.length / 4));
+    const usedIds = [];
+    for(let i = 0; i < freezeCount; i++){
+      let hex;
+      let attempts = 0;
+      do { hex = board[Math.floor(rand() * board.length)]; attempts++; }
+      while((hex.frozen || hex.locked || usedIds.includes(hex.id)) && attempts < 20);
+      if(!hex.frozen && !hex.locked){ hex.frozen = true; usedIds.push(hex.id); }
+    }
+  }
+
+  // BOMBA HEX
+  if(mechanics.includes('bomb')){
+    let hex;
+    let attempts = 0;
+    do { hex = board[Math.floor(rand() * board.length)]; attempts++; }
+    while((hex.locked || hex.frozen || hex.bomb) && attempts < 20);
+    if(!hex.locked && !hex.frozen) hex.bomb = true;
+  }
+
+  // PORTAL ÇİFTİ
+  if(mechanics.includes('portal') && board.length >= 10){
+    const free = board.filter(h => !h.locked && !h.frozen && !h.bomb && !h.portal);
+    if(free.length >= 2){
+      const i1 = Math.floor(rand() * free.length);
+      let i2;
+      do { i2 = Math.floor(rand() * free.length); } while(i2 === i1);
+      free[i1].portal = free[i2].id;
+      free[i2].portal = free[i1].id;
+    }
+  }
+
+  // ÇARPAN HEX (×2)
+  if(mechanics.includes('multiplier')){
+    const free = board.filter(h => !h.locked && !h.frozen && !h.bomb && !h.portal);
+    if(free.length > 0){
+      const hex = free[Math.floor(rand() * free.length)];
+      hex.multiplier = 2;
+    }
+  }
+}
+function resetLevel(){document.getElementById('tutorial').innerHTML='';tutState=null;initLevel(lv);}
+function nextLevel(){
+  document.getElementById('tutorial').innerHTML='';
+  tutState=null;
+  const nextLv=lv+1;
+  if(nextLv>highestUnlockedLevel){
+    highestUnlockedLevel=nextLv;
+    localStorage.setItem("lumina_highest_level",highestUnlockedLevel);
+  }
+  initLevel(nextLv);
+}
+
+// ═══════════════════════════════════════
+// SVG
+// ═══════════════════════════════════════
+const NS2='http://www.w3.org/2000/svg';
+function ns(t){return document.createElementNS(NS2,t);}
+
+function buildSVG(hexCount){
+  // ── Tahtanın koordinat uzayındaki gerçek boyutunu hesapla ──
+  // Tüm hex'lerin x,y koordinatlarından bounding box çıkar
+  let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+  board.forEach(h=>{
+    minX=Math.min(minX,h.x-HS); maxX=Math.max(maxX,h.x+HS);
+    minY=Math.min(minY,h.y-HS); maxY=Math.max(maxY,h.y+HS);
+  });
+  const pad=HS*0.3; // kenar boşluğu
+  const vbX=minX-pad, vbY=minY-pad;
+  const vbW=(maxX-minX)+pad*2, vbH=(maxY-minY)+pad*2;
+
+  // ── Ekranda kullanılabilir yüksekliği hesapla ──
+  // Sayfa öğelerinin yaklaşık yüksekliği (title+tagline+mechanic+hud+colorkey+controls+butonlar)
+  const fixedUIpx = 210; // px — üst ve alt sabit alanlar
+  const availH = window.innerHeight - fixedUIpx;
+  const availW = window.innerWidth * 0.95;
+
+  // Koordinat boyutunu ekrana sığdıracak scale faktörü
+  const scaleH = availH / vbH;
+  const scaleW = availW / vbW;
+  const scale  = Math.min(scaleH, scaleW, 1); // 1'den büyük scale yapma (küçük tahtalar olduğu gibi)
+
+  const W = Math.round(vbW * scale);
+  const H = Math.round(vbH * scale);
+
+  const svg=document.getElementById('board');
+  svg.setAttribute('width', W);
+  svg.setAttribute('height', H);
+  svg.setAttribute('viewBox', `${vbX} ${vbY} ${vbW} ${vbH}`);
+  svg.style.maxWidth  = W + 'px';
+  svg.style.maxHeight = H + 'px';
+  svg.innerHTML='';
+  const defs=ns('defs');
+  COLORS.forEach((c,i)=>{
+    const f=ns('filter');f.setAttribute('id',`gf${i}`);
+    f.setAttribute('x','-80%');f.setAttribute('y','-80%');
+    f.setAttribute('width','260%');f.setAttribute('height','260%');
+    const b=ns('feGaussianBlur');b.setAttribute('in','SourceGraphic');b.setAttribute('stdDeviation','5');b.setAttribute('result','bl');
+    const m=ns('feMerge');
+    ['bl','SourceGraphic'].forEach(r=>{const mn=ns('feMergeNode');mn.setAttribute('in',r);m.appendChild(mn);});
+    f.appendChild(b);f.appendChild(m);defs.appendChild(f);
+  });
+  svg.appendChild(defs);
+  board.forEach(h=>{
+    const g=ns('g');g.setAttribute('id','g_'+h.id);
+    const body=ns('polygon');body.setAttribute('id','bdy_'+h.id);
+    body.setAttribute('points',hexCorners(h.x,h.y,HS*.82));
+    body.setAttribute('stroke-width','1.5');body.setAttribute('stroke-linejoin','round');
+    
+    // İKONLAR
+    if(h.locked){
+      const icon=ns('text');
+      icon.setAttribute('x',h.x);icon.setAttribute('y',h.y+5);
+      icon.setAttribute('text-anchor','middle');icon.setAttribute('font-size','20');
+      icon.setAttribute('fill','#fff');icon.textContent='🔒';
+      icon.style.pointerEvents='none';icon.style.userSelect='none';
+      g.appendChild(icon);
+    }
+    if(h.frozen){
+      const icon=ns('text');
+      icon.setAttribute('x',h.x);icon.setAttribute('y',h.y+5);
+      icon.setAttribute('text-anchor','middle');icon.setAttribute('font-size','18');
+      icon.setAttribute('fill','#00d4ff');icon.textContent='❄️';
+      icon.style.pointerEvents='none';icon.style.userSelect='none';
+      g.appendChild(icon);
+    }
+    if(h.bomb){
+      const icon=ns('text');
+      icon.setAttribute('x',h.x);icon.setAttribute('y',h.y+5);
+      icon.setAttribute('text-anchor','middle');icon.setAttribute('font-size','18');
+      icon.setAttribute('fill','#ff0000');icon.textContent='💣';
+      icon.style.pointerEvents='none';icon.style.userSelect='none';
+      g.appendChild(icon);
+    }
+    if(h.portal){
+      const icon=ns('text');
+      icon.setAttribute('x',h.x);icon.setAttribute('y',h.y+5);
+      icon.setAttribute('text-anchor','middle');icon.setAttribute('font-size','16');
+      icon.setAttribute('fill','#dd44ff');icon.textContent='🌀';
+      icon.style.pointerEvents='none';icon.style.userSelect='none';
+      g.appendChild(icon);
+    }
+    if(h.multiplier > 1){
+      const icon=ns('text');
+      icon.setAttribute('x',h.x);icon.setAttribute('y',h.y+5);
+      icon.setAttribute('text-anchor','middle');icon.setAttribute('font-size','16');
+      icon.setAttribute('fill','#ffd700');icon.textContent='×'+h.multiplier;
+      icon.style.pointerEvents='none';icon.style.userSelect='none';
+      g.appendChild(icon);
+    }
+    
+    const hit=ns('polygon');
+    hit.setAttribute('points',hexCorners(h.x,h.y,HS));
+    hit.setAttribute('fill','transparent');
+    hit.addEventListener('pointerenter',()=>onHover(h,true));
+    hit.addEventListener('pointerleave',()=>onHover(h,false));
+    hit.addEventListener('click',()=>handleClick(h));
+    // Mobil: touchstart ile anında tepki (300ms gecikmeyi sıfırla)
+    hit.addEventListener('touchstart',(e)=>{
+      e.preventDefault();
+      spawnRipple(e.touches[0].clientX, e.touches[0].clientY);
+      handleClick(h);
+    },{passive:false});
+    [body,hit].forEach(el=>g.appendChild(el));
+    svg.appendChild(g);
+  });
+}
+
+function renderColors(){
+  board.forEach(h=>{
+    const c=COLORS[h.color];
+    const body=document.getElementById('bdy_'+h.id);
+    const g=document.getElementById('g_'+h.id);
+    if(!body||!g)return;
+    
+    body.setAttribute('fill',c.fill);
+    body.setAttribute('stroke',c.fill);
+    
+    // Özel görsel efektler
+    if(h.locked){
+      // Kilitli: Gri ton + kilit ikonu
+      body.setAttribute('opacity','0.4');
+      body.setAttribute('stroke','#666');
+      body.setAttribute('stroke-width','3');
+    } else if(h.frozen){
+      // Dondurulmuş: Mavi çerçeve + buz efekti
+      body.setAttribute('stroke','#00d4ff');
+      body.setAttribute('stroke-width','2.5');
+      body.setAttribute('opacity','0.85');
+      body.setAttribute('stroke-dasharray','4,2');
+    } else if(h.bomb){
+      // Bomba: Kırmızı parlayan çerçeve
+      body.setAttribute('stroke','#ff0000');
+      body.setAttribute('stroke-width','3');
+      g.style.animation='hpulse 0.8s ease-in-out infinite';
+    } else if(h.portal){
+      // Portal: Mor parlayan efekt
+      body.setAttribute('stroke','#dd44ff');
+      body.setAttribute('stroke-width','2.5');
+      body.setAttribute('stroke-dasharray','6,3');
+      g.style.animation='hpulse 1.2s ease-in-out infinite';
+    } else if(h.multiplier > 1){
+      // Çarpan: Altın çerçeve
+      body.setAttribute('stroke','#ffd700');
+      body.setAttribute('stroke-width','2.5');
+    } else {
+      // Normal
+      body.setAttribute('opacity','1');
+      body.setAttribute('stroke-width','1.5');
+      body.removeAttribute('stroke-dasharray');
+      g.style.animation='';
+    }
+  });
+}
+
+// ═══════════════════════════════════════
+// HOVER PREVIEW
+// ═══════════════════════════════════════
+function onHover(hex,on){
+  if(locked)return;
+  [hex,...getNeighbors(hex.q,hex.r)].forEach(h=>{
+    const g=document.getElementById('g_'+h.id);
+    if(!g)return;
+    on?g.classList.add('hex-preview'):g.classList.remove('hex-preview');
+  });
+}
+
+// ═══════════════════════════════════════
+// CLICK
+// ═══════════════════════════════════════
+function handleClick(hex){
+  if(locked)return;
+  if(tutState&&tutState.onHexClick){tutState.onHexClick(hex);return;}
+  if(colorChangeMode){applyColorChange(hex);return;}
+  commitMove(hex);
+}
+
+function commitMove(hex){
+  if(locked)return;
+  playSound('click');
+  saveState();
+  const aff=applyMove(hex,true);
+  aff.forEach((h,i)=>{
+    const g=document.getElementById('g_'+h.id);
+    if(!g)return;
+    setTimeout(()=>{
+      g.style.filter='brightness(2.5)';
+      playSound('cascade');
+      setTimeout(()=>{g.style.filter='';},200);
+    },i*40);
+  });
+  setTimeout(()=>{
+    renderColors();
+    // BUG 2 FIX: Kilit açılma mekanizması
+    checkAndUnlockHexes();
+    if(isSolved()){locked=true;setTimeout(showWin,500);}
+  },aff.length*40+60);
+}
+
+// BUG 2 FIX: Kilitli hexlerin kilidini açma fonksiyonu
+function checkAndUnlockHexes(){
+  board.forEach(hex=>{
+    if(!hex.locked) return; // Zaten açıksa kontrol etme
+    
+    // Bu hex'in tüm komşularını al
+    const neighbors = getNeighbors(hex.q, hex.r);
+    
+    // Eğer komşu yoksa kilidi açma
+    if(neighbors.length === 0) return;
+    
+    // Tüm komşuların mavi (cyan) olup olmadığını kontrol et
+    // Cyan renk index'i 0
+    const allNeighborsCyan = neighbors.every(n => n.color === 0);
+    
+    if(allNeighborsCyan){
+      // Kilidi aç
+      hex.locked = false;
+      
+      // Görsel olarak kilit simgesini kaldır
+      const g = document.getElementById('g_' + hex.id);
+      if(g){
+        // Kilit ikonunu bul ve kaldır
+        const lockIcon = Array.from(g.children).find(child => 
+          child.tagName === 'text' && child.textContent === '🔒'
+        );
+        if(lockIcon){
+          lockIcon.remove();
+        }
+      }
+      
+      // Ses efekti
+      playSound('coin');
+      
+      // Mesaj göster
+      showGameMessage("🔓 Kilit Açıldı!");
+    }
+  });
+}
+
+// ═══════════════════════════════════════
+// UNDO
+// ═══════════════════════════════════════
+function saveState(){
+  moveHistory.push({
+    board:board.map(h=>({q:h.q,r:h.r,color:h.color})),
+    moves:moves
+  });
+  if(moveHistory.length>20)moveHistory.shift();
+}
+
+function onUndoClick(){
+  if(coins>=5){
+    if(moveHistory.length===0){
+      showGameMessage("Geri alınacak hamle yok");
+      return;
+    }
+    coins-=5;
+    localStorage.setItem("lumina_coins",coins);
+    updateCoinsDisplay();
+    const prev=moveHistory.pop();
+    board.forEach((h,i)=>{h.color=prev.board[i].color;});
+    moves=prev.moves;
+    document.getElementById('hd-mv').textContent=moves;
+    renderColors();
+    playSound('hint');
+  }else{
+    showGameMessage("Yetersiz Coin");
+  }
+}
+
+// ═══════════════════════════════════════
+// HUD
+// ═══════════════════════════════════════
+function updateHUD(){
+  document.getElementById('hd-lv').textContent=lv+1;
+  document.getElementById('hd-mv').textContent=moves;
+  const dots=document.getElementById('lv-dots');dots.innerHTML='';
+  for(let i=Math.max(0,lv-2);i<=lv+2;i++){const d=document.createElement('div');d.className='ld'+(i<lv?' done':i===lv?' curr':'');dots.appendChild(d);}
+  const tc=Math.floor(rand()*N);seedRng(lv*131+97);const realTc=Math.floor(rand()*N);const c=COLORS[realTc];
+  const chip=document.getElementById('chip-hex');chip.style.background=c.fill;chip.style.boxShadow=`0 0 8px ${c.fill}`;
+  const cn=document.getElementById('chip-name');cn.textContent=c.name;cn.style.color=c.fill;
+  document.getElementById('tgt-chip').style.borderColor=`${c.fill}33`;
+  updateCoinsDisplay();
+  
+  // Level Mekaniği Bilgisi
+  const idx = Math.min(lv, LEVEL_TABLE.length - 1);
+  const mechanics = LEVEL_TABLE[idx].mechanics;
+  const mechanicText = document.getElementById('mechanic-text');
+  if(mechanicText){
+    if(!mechanics || mechanics.length === 0){
+      mechanicText.textContent = '';
+    } else {
+      const icons = {
+        locked:     '🔒 KİLİTLİ',
+        frozen:     '❄️ DONMUŞ',
+        bomb:       '💣 BOMBA',
+        portal:     '🌀 PORTAL',
+        multiplier: '×2 ÇARPAN',
+      };
+      mechanicText.textContent = mechanics.map(m => icons[m] || m).join('  ·  ');
+    }
+  }
+}
+function updateCoinsDisplay(){
+  const el=document.getElementById('hd-coins');
+  if(el) el.textContent=coins;
+}
+function animateMoves(){
+  const el=document.getElementById('hd-mv');el.textContent=moves;
+  el.style.transform='scale(1.4)';el.style.color='#fff';
+  setTimeout(()=>{el.style.transition='all .3s';el.style.transform='';el.style.color='';},130);
+}
+
+// ═══════════════════════════════════════
+// GAME MESSAGE
+// ═══════════════════════════════════════
+function showGameMessage(text){
+  const msg=document.getElementById('game-message');
+  msg.textContent=text;
+  msg.classList.add('show');
+  setTimeout(()=>{
+    msg.classList.remove('show');
+  },1000);
+}
+
+// ═══════════════════════════════════════
+// HINT
+// ═══════════════════════════════════════
+function onHintButtonClick(){
+  if(coins >= 15){
+    coins -= 15;
+    localStorage.setItem("lumina_coins", coins);
+    updateCoinsDisplay();
+    playSound('hint');
+    showHint();
+  } else {
+    showGameMessage("Yetersiz Coin");
+  }
+}
+
+// ─── Simülasyon için board snapshot yardımcıları ───
+function snapColors(){ return board.map(h=>h.color); }
+function restoreColors(snap){ board.forEach((h,i)=>h.color=snap[i]); }
+
+function simApplyMove(hexIdx){
+  // applyMove'un simülasyon versiyonu — board üzerinde çalışır, ses/sayaç yok
+  const hex = board[hexIdx];
+  if(hex.locked) return;
+
+  let affIdxs;
+
+  if(hex.bomb){
+    affIdxs = board.map((_,i)=>i);
+  } else if(hex.portal){
+    const partner = board.findIndex(h=>h.id===hex.portal);
+    if(partner >= 0){
+      const nbrs = DIRS.map(([dq,dr])=>board.findIndex(h=>h.q===board[partner].q+dq&&h.r===board[partner].r+dr)).filter(i=>i>=0);
+      affIdxs = [partner, ...nbrs];
+    } else {
+      const nbrs = DIRS.map(([dq,dr])=>board.findIndex(h=>h.q===hex.q+dq&&h.r===hex.r+dr)).filter(i=>i>=0);
+      affIdxs = [hexIdx, ...nbrs];
+    }
+  } else {
+    const nbrs = DIRS.map(([dq,dr])=>board.findIndex(h=>h.q===hex.q+dq&&h.r===hex.r+dr)).filter(i=>i>=0);
+    affIdxs = [hexIdx, ...nbrs];
+  }
+
+  const times = hex.multiplier || 1;
+  for(let t=0; t<times; t++){
+    affIdxs.forEach(i=>{ if(!board[i].frozen && !board[i].locked) board[i].color=(board[i].color+1)%N; });
+  }
+}
+
+function isSolvedSnap(colors){
+  return board.every((h,i)=>{
+    const t=target.find(tgt=>tgt.q===h.q&&tgt.r===h.r);
+    return t && colors[i]===t.color;
+  });
+}
+
+function heuristicScore(colors){
+  // Hedeften farklı olan hex sayısı (düşük = iyi)
+  return board.reduce((a,h,i)=>{
+    const t=target.find(tgt=>tgt.q===h.q&&tgt.r===h.r);
+    return a + (t && colors[i]!==t.color ? 1 : 0);
+  },0);
+}
+
+function showHint(){
+  const clickable = board.map((_,i)=>i).filter(i=>!board[i].locked);
+  if(clickable.length===0) return;
+
+  const MAX_DEPTH = 10;      // Kaç hamle ileriye bakılacak
+  const BEAM_WIDTH = 12;     // Her derinlikte kaç dal takip edilecek (performans için)
+
+  const initialSnap = snapColors();
+
+  // BFS/Beam Search: {colors, firstMove, score}
+  let frontier = clickable.map(idx=>{
+    restoreColors(initialSnap);
+    simApplyMove(idx);
+    const newColors = snapColors();
+    return { colors: newColors, firstMove: idx, depth: 1, score: heuristicScore(newColors) };
+  });
+
+  // Board'u geri yükle
+  restoreColors(initialSnap);
+
+  // Çözüldü mü kontrol et (1 hamle ile)
+  const solved1 = frontier.find(f=>isSolvedSnap(f.colors));
+  if(solved1){
+    highlightHint(solved1.firstMove);
+    return;
+  }
+
+  // Skora göre sırala, en iyileri tut (beam search)
+  frontier.sort((a,b)=>a.score-b.score);
+  if(frontier.length > BEAM_WIDTH) frontier = frontier.slice(0, BEAM_WIDTH);
+
+  let bestNode = frontier[0]; // Şimdiye kadar bulunan en iyi
+
+  for(let depth=2; depth<=MAX_DEPTH; depth++){
+    const nextFrontier = [];
+
+    for(const node of frontier){
+      for(const idx of clickable){
+        // Simüle et
+        restoreColors(node.colors);
+        simApplyMove(idx);
+        const newColors = snapColors();
+        const score = heuristicScore(newColors);
+
+        const newNode = { colors: newColors, firstMove: node.firstMove, depth, score };
+
+        if(isSolvedSnap(newColors)){
+          restoreColors(initialSnap);
+          highlightHint(newNode.firstMove);
+          return;
+        }
+
+        nextFrontier.push(newNode);
+      }
+    }
+
+    // Sırala ve beam'i kes
+    nextFrontier.sort((a,b)=>a.score-b.score);
+    frontier = nextFrontier.slice(0, BEAM_WIDTH);
+
+    if(frontier[0] && frontier[0].score < bestNode.score){
+      bestNode = frontier[0];
+    }
+  }
+
+  // Board'u geri yükle ve en iyi bulunan hamleyi göster
+  restoreColors(initialSnap);
+  highlightHint(bestNode.firstMove);
+}
+
+function highlightHint(hexIdx){
+  const hex = board[hexIdx];
+  if(!hex) return;
+  const g = document.getElementById('g_' + hex.id);
+  if(g){ g.classList.add('hex-pulse'); setTimeout(()=>g.classList.remove('hex-pulse'), 2500); }
+}
+
+function showRewardedAd(callback){
+  const overlay=document.getElementById('ad-overlay');
+  overlay.classList.add('show');
+  setTimeout(()=>{
+    overlay.classList.remove('show');
+    callback();
+  }, 3000);
+}
+
+let colorChangeMode=false;
+
+function onColorChangeClick(){
+  if(colorChangeMode){
+    colorChangeMode=false;
+    document.getElementById('color-change-btn').style.boxShadow='';
+    document.getElementById('color-change-btn').textContent='🎨 RENK DEĞİŞTİR (30)';
+    showGameMessage("İptal edildi");
+    return;
+  }
+  if(coins < 30){
+    showGameMessage("Yetersiz Coin");
+    return;
+  }
+  colorChangeMode=true;
+  document.getElementById('color-change-btn').style.boxShadow='0 0 14px rgba(221,68,255,.7)';
+  document.getElementById('color-change-btn').textContent='🎨 Bir hücre seç...';
+  showGameMessage("Renk değiştirmek istediğin hücreyi seç");
+}
+
+function applyColorChange(hex){
+  colorChangeMode=false;
+  document.getElementById('color-change-btn').style.boxShadow='';
+  document.getElementById('color-change-btn').textContent='🎨 RENK DEĞİŞTİR (30)';
+  coins -= 30;
+  localStorage.setItem("lumina_coins", coins);
+  updateCoinsDisplay();
+  hex.color = (hex.color + 1) % N;
+  renderColors();
+  playSound('coin');
+  moves++;
+  animateMoves();
+  if(isSolved()) setTimeout(showWin, 300);
+}
+
+function onEarnCoinClick(){
+  showRewardedAd(()=>{
+    coins += 30;
+    localStorage.setItem("lumina_coins", coins);
+    updateCoinsDisplay();
+    playSound('coin');
+    showGameMessage("+30 Coin Kazandın!");
+  });
+}
+
+// ═══════════════════════════════════════
+// WIN
+// ═══════════════════════════════════════
+function showWin(){
+  playSound('solve');
+  const par=getLevelConfig(lv).par,stars=moves<=par?3:moves<=Math.floor(par*1.6)?2:1;
+  const coinReward=stars===3?20:stars===2?10:5;
+  
+  currentWinStars=stars;
+  currentWinPar=par;
+  
+  startWinCelebration(stars,coinReward,par);
+  
+  coins+=coinReward;
+  localStorage.setItem("lumina_coins", coins);
+  updateLevelStats(lv,stars,moves);
+  
+  setTimeout(()=>{
+    updateCoinsDisplay();
+  },1200);
+  
+  const adBtnContainer=document.getElementById('win-ad-btn-container');
+  if(stars<3){
+    adBtnContainer.style.display='block';
+  }else{
+    adBtnContainer.style.display='none';
+  }
+}
+
+function startWinCelebration(stars,coinReward,par){
+  screenFlash();
+  setTimeout(()=>spawnHexBurst(),100);
+  setTimeout(()=>{
+    document.getElementById('win-title').textContent='LEVEL COMPLETE';
+    document.getElementById('win-stars').textContent='★'.repeat(stars)+'☆'.repeat(3-stars);
+    document.getElementById('win-sub').textContent=`Hamle: ${moves} | Hedef: ${par} ${moves<=par?'• Mükemmel!':'• Başarılı'}`;
+    document.getElementById('win-coin-reward').textContent=`+${coinReward} COINS`;
+    
+    let parText = `<div style="font-size:.65rem;line-height:1.6;color:#5a8aaa;margin-top:.3rem;">`;
+    parText += `★★★ ${par} hamle veya daha az → +20 coins<br>`;
+    parText += `★★☆ ${par+1}-${Math.floor(par*1.6)} hamle → +10 coins<br>`;
+    parText += `★☆☆ ${Math.floor(par*1.6)+1}+ hamle → +5 coins`;
+    parText += `</div>`;
+    document.getElementById('win-par').innerHTML=parText;
+    
+    document.getElementById('win').classList.add('show');
+    setTimeout(()=>spawnCoinParticles(coinReward),400);
+    setTimeout(()=>playSound('coin'),400);
+  },300);
+}
+
+function screenFlash(){
+  const flash=document.getElementById('win-flash');
+  flash.style.opacity='1';
+  setTimeout(()=>{
+    flash.style.transition='opacity 0.3s ease-out';
+    flash.style.opacity='0';
+  },50);
+  setTimeout(()=>{
+    flash.style.transition='';
+  },350);
+}
+
+function watchAdForStar(){
+  showRewardedAd(()=>{
+    if(currentWinStars<3){
+      const oldStars=currentWinStars;
+      currentWinStars++;
+      
+      const oldCoinReward=oldStars===2?10:5;
+      const newCoinReward=currentWinStars===3?20:currentWinStars===2?10:5;
+      const coinDiff=newCoinReward-oldCoinReward;
+      
+      coins+=coinDiff;
+      localStorage.setItem("lumina_coins",coins);
+      updateCoinsDisplay();
+      
+      updateLevelStats(lv,currentWinStars,moves);
+      
+      document.getElementById('win-stars').textContent='★'.repeat(currentWinStars)+'☆'.repeat(3-currentWinStars);
+      document.getElementById('win-coin-reward').textContent=`+${newCoinReward} COINS`;
+      
+      document.getElementById('win-ad-btn-container').style.display='none';
+      
+      playSound('coin');
+      spawnCoinParticles(coinDiff);
+      showGameMessage("+1 Yıldız Kazandın!");
+    }
+  });
+}
+
+function spawnHexBurst(){
+  const canvas=document.getElementById('win-canvas');
+  canvas.width=window.innerWidth;
+  canvas.height=window.innerHeight;
+  const ctx=canvas.getContext('2d');
+  const particles=[];
+  const colors=['#00e5ff','#7c6fff','#dd44ff'];
+  const centerX=canvas.width/2;
+  const centerY=canvas.height/2;
+  
+  for(let i=0;i<40;i++){
+    const angle=Math.random()*Math.PI*2;
+    const speed=2+Math.random()*4;
+    particles.push({
+      x:centerX,
+      y:centerY,
+      vx:Math.cos(angle)*speed,
+      vy:Math.sin(angle)*speed,
+      size:8+Math.random()*12,
+      color:colors[Math.floor(Math.random()*colors.length)],
+      opacity:1,
+      life:1
+    });
+  }
+  
+  let frame=0;
+  const maxFrames=60;
+  
+  function animate(){
+    if(frame>=maxFrames){
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      return;
+    }
+    
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    
+    particles.forEach(p=>{
+      p.x+=p.vx;
+      p.y+=p.vy;
+      p.life-=0.016;
+      p.opacity=Math.max(0,p.life);
+      
+      ctx.save();
+      ctx.translate(p.x,p.y);
+      ctx.rotate(frame*0.1);
+      ctx.globalAlpha=p.opacity;
+      ctx.fillStyle=p.color;
+      ctx.shadowBlur=10;
+      ctx.shadowColor=p.color;
+      
+      const size=p.size;
+      ctx.beginPath();
+      for(let i=0;i<6;i++){
+        const angle=Math.PI/3*i;
+        const x=size*Math.cos(angle);
+        const y=size*Math.sin(angle);
+        if(i===0)ctx.moveTo(x,y);
+        else ctx.lineTo(x,y);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    });
+    
+    frame++;
+    requestAnimationFrame(animate);
+  }
+  
+  animate();
+}
+
+function spawnCoinParticles(coinReward){
+  const centerX=window.innerWidth/2;
+  const centerY=window.innerHeight/2;
+  
+  for(let i=0;i<12;i++){
+    const p=document.createElement('div');
+    p.style.position='fixed';
+    p.style.left=centerX+'px';
+    p.style.top=centerY+'px';
+    p.style.width='8px';
+    p.style.height='8px';
+    p.style.borderRadius='50%';
+    p.style.background='#ffd700';
+    p.style.boxShadow='0 0 8px #ffd700';
+    p.style.pointerEvents='none';
+    p.style.zIndex='951';
+    
+    const angle=Math.random()*Math.PI*2;
+    const dist=30+Math.random()*40;
+    const tx=Math.cos(angle)*dist;
+    const ty=Math.sin(angle)*dist-50;
+    
+    p.style.transition='all 0.6s cubic-bezier(.34,1.56,.64,1)';
+    document.body.appendChild(p);
+    
+    setTimeout(()=>{
+      p.style.transform=`translate(${tx}px,${ty}px)`;
+      p.style.opacity='0';
+    },10);
+    
+    setTimeout(()=>p.remove(),650);
+  }
+}
+
+function spawnParticles(){
+  for(let i=0;i<60;i++){
+    const p=document.createElement('div');p.className='spark';
+    const c=COLORS[i%N],sz=3+Math.random()*6;
+    Object.assign(p.style,{width:sz+'px',height:sz+'px',background:c.fill,boxShadow:`0 0 6px ${c.fill}`,
+      left:(20+Math.random()*60)+'vw',top:(20+Math.random()*60)+'vh',
+      animationDuration:(.5+Math.random()*.8)+'s',animationDelay:(Math.random()*.35)+'s'});
+    p.style.setProperty('--tx',(Math.random()*340-170)+'px');
+    p.style.setProperty('--ty',(Math.random()*340-170)+'px');
+    document.body.appendChild(p);setTimeout(()=>p.remove(),1600);
+  }
+}
+
+// ═══════════════════════════════════════
+// TUTORIAL
+// ═══════════════════════════════════════
+function launchTutorial(){
+  // Simply show tutorial overlay without resetting game
+  runTut(0);
+}
+
+const TUT=[
+  {
+    step:'ADIM 1 / 5', icon:'🔷', title:'HOŞ GELDİN!',
+    body:`<strong>Hexify</strong>, glowing hexagon panelleriyle dolu bir bulmaca oyunudur.<br><br>
+          Ekrandaki altıgenler üç renk arasında geçiş yapar:<br>
+          <strong>CYAN</strong> → <strong class="in">INDIGO</strong> → <strong class="vi">VIOLET</strong> → <strong>CYAN</strong>...`,
+    btn:'DEVAM →', waitClick:false,
+  },
+  {
+    step:'ADIM 2 / 5', icon:'👆', title:'TIKLAMA MEKANİĞİ',
+    body:`Bir hexagona tıkladığında,<br>
+          <strong>o hex + etrafındaki 6 komşusu</strong><br>
+          hep birlikte bir sonraki renge atlar.<br><br>
+          <em>Fareyi hexagonların üzerine götür — hangileri parlıyorsa onlar etkilenecek!</em>`,
+    btn:'DENE: HERHANGİ BİR HEXAGONA TIKLA', waitClick:true,
+  },
+  {
+    step:'ADIM 3 / 5', icon:'✨', title:'GÖRDÜNMü?',
+    body:`Seçtiğin hex ve çevresi birlikte renk değiştirdi!<br><br>
+          Bu cascade (şelale) etkisi her tıklamada gerçekleşir.<br>
+          Bir hamle bazen işleri iyileştirir, bazen karıştırır — <strong>strateji önemli!</strong>`,
+    btn:'DEVAM →', waitClick:false,
+  },
+  {
+    step:'ADIM 4 / 5', icon:'🎯', title:'AMAÇ NEDİR?',
+    body:`Sağ üstteki <strong>Hedef Renk</strong>'e bak.<br><br>
+          Tüm hexagonları o renge eşitlersen bulmacayı çözdün!<br><br>
+          <strong>✦ İpucu</strong> butonu en mantıklı hamleyi parlattır.<br>
+          <strong>↺ Sıfırla</strong> başa alır. <strong>Hamle sayısı</strong> yıldız belirler.`,
+    btn:'DEVAM →', waitClick:false,
+  },
+  {
+    step:'ADIM 5 / 5', icon:'🚀', title:'HAZIR MISIN?',
+    body:`İlk level çok kolay — sadece 7 hexagon, 2 hamle karışmış.<br><br>
+          Bu küçük bulmacayı çözerek mekanik sezgini test et.<br>
+          Sonra ızgara büyür, karmaşıklık artar!`,
+    btn:'🚀 OYNAMAYA BAŞLA!', waitClick:false, isLast:true,
+  },
+];
+
+function runTut(idx){
+  const tut=document.getElementById('tutorial');
+  tut.innerHTML='';
+  
+  // Add active class to slide tutorial up
+  tut.classList.add('active');
+  // Add class to body to shift content up
+  document.body.classList.add('tutorial-open');
+  
+  const step=TUT[idx];
+  tutState=null;
+
+  const bubble=document.createElement('div');
+  bubble.className='tut-bubble';
+
+  // Progress dots
+  const prog=document.createElement('div');prog.className='tut-progress';
+  TUT.forEach((_,i)=>{const d=document.createElement('div');d.className='tp-dot'+(i<=idx?' active':'');prog.appendChild(d);});
+
+  bubble.innerHTML=`
+    <div class="tut-step">${step.step}</div>
+    <div class="tut-icon">${step.icon}</div>
+    <div class="tut-title">${step.title}</div>
+    <div class="tut-body">${step.body}</div>
+    <button class="tut-btn" id="tut-btn"${step.waitClick?' disabled':''} style="${step.waitClick?'opacity:.38;cursor:not-allowed':''}">
+      ${step.btn}
+    </button>
+    <button class="tut-skip" id="tut-skip">Atla — oyuna geç →</button>
+  `;
+  bubble.insertBefore(prog, bubble.firstChild);
+  tut.appendChild(bubble);
+
+  const btn=document.getElementById('tut-btn');
+  const skip=document.getElementById('tut-skip');
+
+  skip.addEventListener('click', closeTut);
+
+  if(step.waitClick){
+    // Board remains interactive
+    tutState={
+      onHexClick:(hex)=>{
+        commitMove(hex);
+        tutState=null;
+        // Unlock btn
+        btn.disabled=false;btn.style.opacity='';btn.style.cursor='';
+        btn.textContent='GÖRDÜM — DEVAM →';
+        btn.addEventListener('click',()=>runTut(idx+1));
+      }
+    };
+  } else if(step.isLast){
+    btn.addEventListener('click', closeTut);
+  } else {
+    btn.addEventListener('click',()=>runTut(idx+1));
+  }
+}
+
+function closeTut(){
+  const tut=document.getElementById('tutorial');
+  
+  // Remove active class to slide tutorial down
+  tut.classList.remove('active');
+  // Remove body class to return content to normal position
+  document.body.classList.remove('tutorial-open');
+  
+  // Clear tutorial content after animation completes
+  setTimeout(()=>{
+    tut.innerHTML='';
+  }, 300);
+  
+  tutState=null;
+  // Don't reset the level - just close the tutorial overlay
+}
+
+// ═══════════════════════════════════════
+// STATISTICS
+// ═══════════════════════════════════════
+function loadLevelStats(){
+  const stored=localStorage.getItem("lumina_level_stats");
+  if(stored){
+    try{
+      levelStats=JSON.parse(stored);
+    }catch(e){
+      levelStats={};
+    }
+  }
+}
+
+function saveLevelStats(){
+  localStorage.setItem("lumina_level_stats",JSON.stringify(levelStats));
+}
+
+function updateLevelStats(level,stars,moves){
+  const existing=levelStats[level];
+  if(!existing){
+    levelStats[level]={stars,moves};
+    saveLevelStats();
+  }else{
+    if(stars>existing.stars||(stars===existing.stars&&moves<existing.moves)){
+      levelStats[level]={stars,moves};
+      saveLevelStats();
+    }
+  }
+}
+
+function openStatsPanel(){
+  renderStatsList();
+  document.getElementById('stats-overlay').classList.add('show');
+}
+
+function closeStatsPanel(){
+  document.getElementById('stats-overlay').classList.remove('show');
+}
+
+function renderStatsList(){
+  const list=document.getElementById('stats-list');
+  const levels=Object.keys(levelStats).map(k=>parseInt(k)).sort((a,b)=>a-b);
+  if(levels.length===0){
+    list.innerHTML='<div class="stats-empty">Henüz tamamlanmış seviye yok</div>';
+    return;
+  }
+  list.innerHTML='';
+  levels.forEach(lvl=>{
+    const stat=levelStats[lvl];
+    const item=document.createElement('div');
+    item.className='stats-item';
+    const starStr='★'.repeat(stat.stars)+'☆'.repeat(3-stat.stars);
+    item.innerHTML=`
+      <span class="stats-level">Level ${lvl+1}</span>
+      <span>
+        <span class="stats-stars">${starStr}</span>
+        <span class="stats-moves">Hamle: ${stat.moves}</span>
+      </span>
+    `;
+    list.appendChild(item);
+  });
+}
+
+// ═══════════════════════════════════════
+// LEVEL SELECT
+// ═══════════════════════════════════════
+function openLevelSelect(){
+  renderLevelSelect();
+  document.getElementById('levelselect-overlay').classList.add('show');
+}
+
+function closeLevelSelect(){
+  document.getElementById('levelselect-overlay').classList.remove('show');
+}
+
+function renderLevelSelect(){
+  const grid=document.getElementById('levelselect-grid');
+  grid.innerHTML='';
+  const totalLevels=100;
+  
+  for(let i=0;i<totalLevels;i++){
+    const btn=document.createElement('button');
+    btn.className='level-btn';
+    if(i===lv){
+      btn.classList.add('current');
+    }
+    btn.textContent=(i+1);
+    
+    if(i<=highestUnlockedLevel){
+      btn.onclick=()=>{
+        closeLevelSelect();
+        initLevel(i);
+      };
+    }else{
+      btn.disabled=true;
+    }
+    
+    grid.appendChild(btn);
+  }
+}
+
+// ═══════════════════════════════════════
+// BACKGROUND ANIMATION — Stars & Particles
+// ═══════════════════════════════════════
+(function(){
+  const canvas = document.getElementById('bg-canvas');
+  const ctx = canvas.getContext('2d');
+
+  let W, H;
+  function resize(){
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // — STARS —
+  const STAR_COUNT = 120;
+  const stars = Array.from({length: STAR_COUNT}, () => ({
+    x: Math.random() * window.innerWidth,
+    y: Math.random() * window.innerHeight,
+    r: Math.random() * 1.2 + 0.2,
+    alpha: Math.random() * 0.6 + 0.1,
+    twinkleSpeed: Math.random() * 0.008 + 0.003,
+    twinkleDir: Math.random() > 0.5 ? 1 : -1,
+  }));
+
+  // — PARTICLES —
+  const COLORS = ['#00e5ff','#7c6fff','#dd44ff','#00b8d4','#9c6fff'];
+  const PARTICLE_COUNT = 28;
+  const particles = Array.from({length: PARTICLE_COUNT}, () => createParticle(true));
+
+  function createParticle(randomY = false){
+    return {
+      x: Math.random() * window.innerWidth,
+      y: randomY ? Math.random() * window.innerHeight : window.innerHeight + 10,
+      r: Math.random() * 1.8 + 0.5,
+      color: COLORS[Math.floor(Math.random() * COLORS.length)],
+      speedY: -(Math.random() * 0.4 + 0.1),
+      speedX: (Math.random() - 0.5) * 0.25,
+      alpha: Math.random() * 0.5 + 0.2,
+      alphaDir: Math.random() > 0.5 ? 1 : -1,
+      alphaSpeed: Math.random() * 0.004 + 0.002,
+      pulse: Math.random() * Math.PI * 2,
+    };
+  }
+
+  // — NEBULA BLOBS (slow drifting) —
+  const blobs = [
+    {x: 0.18, y: 0.18, rx: 0.28, ry: 0.18, color: 'rgba(0,229,255,0.028)', dx: 0.00008, dy: 0.00005},
+    {x: 0.82, y: 0.80, rx: 0.25, ry: 0.20, color: 'rgba(221,68,255,0.032)', dx: -0.00006, dy: -0.00007},
+    {x: 0.50, y: 0.40, rx: 0.20, ry: 0.15, color: 'rgba(124,111,255,0.022)', dx: 0.00004, dy: 0.00009},
+  ];
+
+  let frame = 0;
+
+  function draw(){
+    ctx.clearRect(0, 0, W, H);
+
+    // Nebula blobs
+    blobs.forEach(b => {
+      b.x += b.dx; b.y += b.dy;
+      if(b.x < 0 || b.x > 1) b.dx *= -1;
+      if(b.y < 0 || b.y > 1) b.dy *= -1;
+      const gx = b.x * W, gy = b.y * H;
+      const grad = ctx.createRadialGradient(gx, gy, 0, gx, gy, b.rx * W);
+      grad.addColorStop(0, b.color);
+      grad.addColorStop(1, 'transparent');
+      ctx.save();
+      ctx.scale(1, b.ry / b.rx);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(gx, gy * (b.rx / b.ry), b.rx * W, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
+
+    // Stars
+    stars.forEach(s => {
+      s.alpha += s.twinkleSpeed * s.twinkleDir;
+      if(s.alpha > 0.75 || s.alpha < 0.05) s.twinkleDir *= -1;
+      ctx.save();
+      ctx.globalAlpha = s.alpha;
+      ctx.fillStyle = '#c8dff0';
+      ctx.shadowColor = '#00e5ff';
+      ctx.shadowBlur = s.r > 0.8 ? 4 : 0;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
+
+    // Particles
+    particles.forEach((p, i) => {
+      p.x += p.speedX;
+      p.y += p.speedY;
+      p.pulse += 0.04;
+      p.alpha += p.alphaSpeed * p.alphaDir;
+      if(p.alpha > 0.7 || p.alpha < 0.1) p.alphaDir *= -1;
+
+      // glow pulse
+      const glowR = Math.max(0.1, p.r + Math.sin(p.pulse) * 0.6);
+
+      ctx.save();
+      ctx.globalAlpha = p.alpha;
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, glowR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // reset when off screen
+      if(p.y < -10 || p.x < -10 || p.x > W + 10){
+        particles[i] = createParticle(false);
+      }
+    });
+
+    frame++;
+    requestAnimationFrame(draw);
+  }
+
+  draw();
+})();
+
+// ═══════════════════════════════════════
+// GÜNLÜK GİRİŞ ÖDÜL SİSTEMİ
+// ═══════════════════════════════════════
+function getDailyData(){
+  try{
+    return JSON.parse(localStorage.getItem('lumina_daily') || '{}');
+  } catch(e){ return {}; }
+}
+function saveDailyData(d){
+  localStorage.setItem('lumina_daily', JSON.stringify(d));
+}
+
+function getTodayKey(){
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
+}
+
+function getYesterdayKey(){
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
+}
+
+function checkDailyReward(){
+  const data = getDailyData();
+  const today = getTodayKey();
+  if(data.lastClaim === today) return; // bugün zaten aldı
+  showDailyOverlay(data);
+}
+
+function showDailyOverlay(data){
+  const today = getTodayKey();
+  const yesterday = getYesterdayKey();
+
+  // Streak hesapla
+  let streak = (data.lastClaim === yesterday) ? (data.streak || 1) : 1;
+  // Bugün ilk kez açılıyorsa streak artacak, ama ancak claim edilince kaydedilir
+  const displayStreak = (data.lastClaim === yesterday) ? streak : (data.streak || 0) + 1;
+
+  const isWeekly = (displayStreak % 7 === 0);
+  const rewardCoins = isWeekly ? 180 : 30;
+
+  // Başlık & ikon
+  document.getElementById('daily-panel-title').textContent = isWeekly ? '🎁 HAFTALIK ÖDÜL!' : 'GÜNLÜK ÖDÜL';
+  document.getElementById('daily-panel-sub').textContent = isWeekly ? '7 Günlük Seri Tamamlandı!' : 'Giriş Serisini Koru!';
+  document.getElementById('daily-reward-icon').textContent = isWeekly ? '🧰' : '🪙';
+  document.getElementById('daily-reward-icon').className = isWeekly ? 'treasure-box' : '';
+  document.getElementById('daily-reward-amount').textContent = `+${rewardCoins} COIN`;
+  document.getElementById('streak-num').textContent = displayStreak;
+
+  // 7 günlük grid oluştur
+  const grid = document.getElementById('daily-days-grid');
+  grid.innerHTML = '';
+  for(let i = 1; i <= 7; i++){
+    const div = document.createElement('div');
+    div.className = 'daily-day';
+    const dayStreak = (data.lastClaim === yesterday)
+      ? (data.streak || 0)
+      : (data.streak || 0);
+    const isToday = i === (displayStreak % 7 === 0 ? 7 : displayStreak % 7);
+    const isDone = i < (displayStreak % 7 === 0 ? 7 : displayStreak % 7);
+    const isWeeklyDay = (i === 7);
+
+    if(isToday) div.classList.add('today');
+    else if(isDone) div.classList.add('done');
+    if(isWeeklyDay) div.classList.add('weekly');
+
+    div.innerHTML = `
+      <div class="daily-day-num">Gün ${i}</div>
+      <div class="daily-day-icon">${isDone ? '✅' : isToday ? (isWeeklyDay ? '🧰' : '🪙') : (isWeeklyDay ? '🧰' : '○')}</div>
+      <div class="daily-day-coin">${i === 7 ? '180' : '30'}</div>
+    `;
+    grid.appendChild(div);
+  }
+
+  // Overlay göster
+  document.getElementById('daily-overlay').classList.add('show');
+
+  // Animasyon: ödül miktarı
+  const amtEl = document.getElementById('daily-reward-amount');
+  amtEl.style.animation = 'none';
+  void amtEl.offsetWidth;
+  amtEl.style.animation = '';
+}
+
+function claimDailyReward(){
+  const data = getDailyData();
+  const today = getTodayKey();
+  const yesterday = getYesterdayKey();
+
+  let streak = (data.lastClaim === yesterday) ? (data.streak || 1) : 1;
+  const newStreak = (data.lastClaim === yesterday) ? streak + 1 : 1;
+  // Eğer dün oynamadıysa seri sıfırlanır
+  const finalStreak = (data.lastClaim === yesterday || !data.lastClaim) ? newStreak : 1;
+
+  const isWeekly = (finalStreak % 7 === 0);
+  const rewardCoins = isWeekly ? 180 : 30;
+
+  // Coin ekle
+  coins += rewardCoins;
+  localStorage.setItem('lumina_coins', coins);
+  updateCoinsDisplay();
+
+  // Veriyi kaydet
+  saveDailyData({ lastClaim: today, streak: finalStreak });
+
+  // Ses
+  playSound('coin');
+  if(isWeekly){
+    setTimeout(()=>playSound('solve'), 200);
+    setTimeout(()=>playSound('coin'), 400);
+  }
+
+  // Overlay kapat
+  document.getElementById('daily-overlay').classList.remove('show');
+
+  // Ekranda coin pop göster
+  showGameMessage(`+${rewardCoins} COIN KAZANILDI! 🎉`);
+}
+
+function updateCoinsDisplay(){
+  const el = document.getElementById('hd-coins');
+  if(el) el.textContent = coins;
+}
+
+// ═══════════════════════════════════════
+// MOBİL: Touch Ripple Efekti
+// ═══════════════════════════════════════
+function spawnRipple(x, y){
+  const el = document.createElement('div');
+  el.className = 'touch-ripple';
+  el.style.cssText = `left:${x-24}px;top:${y-24}px;width:48px;height:48px;`;
+  document.body.appendChild(el);
+  el.addEventListener('animationend', ()=>el.remove());
+}
+
+// Butonlara da ripple
+document.addEventListener('touchstart', (e)=>{
+  const btn = e.target.closest('.btn, .daily-claim-btn, .tut-btn');
+  if(btn){
+    const r = btn.getBoundingClientRect();
+    const t = e.touches[0];
+    spawnRipple(t.clientX, t.clientY);
+  }
+},{passive:true});
+
+// ═══════════════════════════════════════
+// MOBİL: Swipe to Close Overlays
+// ═══════════════════════════════════════
+(function(){
+  const overlayIds = ['stats-overlay','levelselect-overlay','daily-overlay'];
+  overlayIds.forEach(id=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    let startY = 0, startX = 0;
+    el.addEventListener('touchstart', e=>{
+      startY = e.touches[0].clientY;
+      startX = e.touches[0].clientX;
+    },{passive:true});
+    el.addEventListener('touchend', e=>{
+      const dy = e.changedTouches[0].clientY - startY;
+      const dx = Math.abs(e.changedTouches[0].clientX - startX);
+      // Aşağı swipe (en az 60px, yatay değil)
+      if(dy > 60 && dx < 50){
+        if(id === 'stats-overlay') closeStatsPanel();
+        else if(id === 'levelselect-overlay') closeLevelSelect();
+        else if(id === 'daily-overlay') el.classList.remove('show');
+      }
+    },{passive:true});
+  });
+})();
+
+// ═══════════════════════════════════════
+// BOOT — show tutorial immediately
+// ═══════════════════════════════════════
+lv = 0;
+coins = parseInt(localStorage.getItem("lumina_coins") || 0);
+highestUnlockedLevel = parseInt(localStorage.getItem("lumina_highest_level") || 0);
+loadLevelStats();
+initLevel(lv);
+if(lv === 0){
+  runTut(0);
+}
+// Günlük ödül kontrolü — tutorial'dan sonra küçük gecikmeyle
+setTimeout(checkDailyReward, 1200);
+</script>
+</body>
+</html>
